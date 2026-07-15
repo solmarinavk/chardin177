@@ -40,13 +40,17 @@ Cada fase es una serie de sesiones de Claude Code. Marca los checkboxes al compl
 - [x] 2.4 Dashboard de transparencia (home para residentes): saldo de caja, semáforo del mes, últimos 10 egresos con comprobante, gráfico de consumo de agua por dpto de los últimos 6 meses, provisiones. _(/inicio; el gráfico es small multiples accesible)_
 - [x] 2.5 Morosidad: vista de deudas acumuladas por dpto entre periodos, con antigüedad. _(sección "Deudas por departamento" en /estado-cuenta)_
 
-## FASE 3 · Fino operativo (2 a 3 sesiones)
+## FASE 3 · Fino operativo (3 a 4 sesiones)
+
+> Los roles de cada flujo siguen `docs/MATRIZ_ROLES.md` (fuente de verdad del reparto de permisos).
 
 - [ ] 3.1 Provisiones: catálogo (vacaciones, CTS, gratificación), aporte mensual automático al cerrar mes, registro de uso, saldo acumulado en dashboard.
-- [ ] 3.2 Cuotas extra: crear derrama con concepto y monto total, prorrateo igual o personalizado, se inyecta como EXTRA en el siguiente borrador.
+- [ ] 3.2 Cuota extraordinaria / derrama (roles: **admin o tesorería**, ver matriz): crear la derrama con concepto y monto total **o** monto por dpto, con prorrateo **igual o personalizado**; se inyecta como **EXTRA** en el borrador del siguiente periodo, sumándose a la cuota normal; cada vecino la ve desglosada en su recibo. A nivel de datos ya está soportado (tabla `ajustes` con `origen='cuota_extra'`, que el motor lee); falta la UI de creación con vista previa.
 - [ ] 3.3 Conciliación de agua: asistente que toma un rango de periodos, compara cobrado vs facturado real (input manual del total Sedapal del rango), prorratea la diferencia por consumo y genera AJUSTES para el siguiente periodo, con vista previa antes de aplicar. Replicar la lógica de la hoja "Cuadre Agua".
 - [ ] 3.4 Recibo por dpto: vista imprimible/compartible con desglose completo, botón "compartir por WhatsApp" (link wa.me con texto del resumen).
 - [ ] 3.5 Notificaciones por Resend: al emitir (cuota del mes a cada residente) y recordatorio a pendientes el día 25.
+- [ ] 3.6 Mantenimiento / incidencia como egreso (roles: **tesorería o admin**, ver matriz): el vecino avisa por fuera (WhatsApp del edificio) y tesorería/admin lo registran como un **egreso** con su categoría (Ascensor, Reparaciones, etc.), monto, fecha y comprobante; entra a la caja del mes en curso y se ve en el dashboard de transparencia con su comprobante. **NO hay módulo de reporte del vecino** (decisión de la matriz: se mantiene simple). _Hoy ya se puede registrar como egreso normal; esta tarea es formalizar el flujo: un acceso directo "Registrar mantenimiento" que precargue la categoría, y dejarlo documentado._ Si el arreglo es grande y se cobra aparte, se usa la cuota extraordinaria (3.2).
+- [ ] 3.7 Constancia de pago del vecino (opcional) + confirmación de tesorería (roles: **vecino** sube, **tesorería** confirma; admin respaldo — ver matriz): el vecino **puede** subir la foto de su constancia desde su estado de cuenta; el pago queda **"pendiente de confirmar"**. **Tesorería confirma** (lo valida y lo registra como pago oficial) o lo registra directo si el vecino no subió nada. Regla: el pago **solo cuenta como oficial cuando tesorería lo confirma**; la constancia del vecino es una ayuda, no reemplaza la confirmación. Requiere una tabla/estado para constancias pendientes y un permiso de escritura acotado para que el residente solo pueda adjuntar la suya.
 
 ## FASE 4 · Historia y blindaje (2 a 3 sesiones)
 
@@ -59,11 +63,10 @@ Cada fase es una serie de sesiones de Claude Code. Marca los checkboxes al compl
 
 ## Backlog (ideas futuras, no bloquean nada)
 
-- [ ] Residente sube su constancia de pago para que tesorería la confirme (PROPUESTA §5, opcional)
+- [ ] **Definir cuotas fijas desde la UI** (rol admin): pantalla para versionar vigilancia, mantenimiento, materiales y agua común (hoy vienen sembradas en `schema.sql`; RLS ya lo restringe a admin). Sin UI, cambiarlas requiere SQL. _(Brecha detectada en la auditoría de la matriz; decidir su fase.)_
 - [ ] Modo offline para la PWA (service worker con caché del último estado)
-- [ ] Decidir en junta si portería debe poder LEER datos financieros vía API (hoy el schema da lectura a todo autenticado por transparencia; la UI ya se lo oculta)
+- [ ] Decidir en junta si portería debe poder LEER datos financieros vía API (hoy el schema da lectura a todo autenticado por transparencia; la UI ya se lo oculta). Ver "Nota de seguridad pendiente" en `docs/MATRIZ_ROLES.md`.
 - [ ] PIN de acceso rápido para portería
-- [ ] Registro de incidencias/mantenimientos del edificio
 - [ ] Reserva de áreas comunes
 - [ ] Exportar reporte anual PDF para la junta
 - [ ] Votaciones de junta en línea
