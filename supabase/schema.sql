@@ -332,8 +332,11 @@ begin
   return v_next;
 end $$;
 
--- Recalcular estado de cuota tras cada pago
-create or replace function fn_actualiza_estado_cuota() returns trigger language plpgsql as $$
+-- Recalcular estado de cuota tras cada pago.
+-- SECURITY DEFINER: cuotas no tiene política de escritura (solo el motor);
+-- sin esto, el trigger fallaría con los permisos del usuario que paga.
+create or replace function fn_actualiza_estado_cuota() returns trigger
+language plpgsql security definer set search_path = public as $$
 declare v_pagado integer; v_total integer; v_cuota bigint;
 begin
   v_cuota := coalesce(new.cuota_id, old.cuota_id);
@@ -350,7 +353,10 @@ create trigger tg_pagos_estado after insert or update or delete on pagos
   for each row execute function fn_actualiza_estado_cuota();
 
 -- ---------- Auditoría ----------
-create or replace function fn_audit() returns trigger language plpgsql as $$
+-- SECURITY DEFINER: audit_log no tiene política de INSERT (nadie escribe
+-- directo); el trigger necesita privilegios propios para dejar la bitácora.
+create or replace function fn_audit() returns trigger
+language plpgsql security definer set search_path = public as $$
 begin
   insert into audit_log (tabla, registro_id, accion, usuario, antes, despues)
   values (tg_table_name,
@@ -386,8 +392,11 @@ create trigger tg_lock_recibos before insert or update or delete on recibos_serv
   for each row execute function fn_bloquea_emitido();
 
 -- ---------- RLS ----------
--- Helper de rol
-create or replace function mi_rol() returns rol_usuario language sql stable as
+-- Helper de rol. SECURITY DEFINER es OBLIGATORIO: las políticas de `perfiles`
+-- llaman a mi_rol(), que lee `perfiles`; sin definer eso es recursión infinita
+-- ("stack depth limit exceeded") en cualquier escritura protegida por rol.
+create or replace function mi_rol() returns rol_usuario
+language sql stable security definer set search_path = public as
 $$ select rol from perfiles where user_id = auth.uid() $$;
 
 alter table departamentos enable row level security;
@@ -459,3 +468,7 @@ create policy w_prov on provisiones for all to authenticated
 
 -- audit_log: solo admin lee; nadie escribe directo (lo hacen los triggers)
 create policy sel_audit on audit_log for select to authenticated using (mi_rol() = 'admin');
+
+-- NOTA Storage: las políticas de los buckets (comprobantes, medidores,
+-- documentos) viven en supabase/migrations/0004_storage_policies.sql porque el
+-- esquema `storage` solo existe en Supabase (no en la base de tests).
