@@ -1,0 +1,222 @@
+import { createClient } from "@/lib/supabase/server";
+import type { Tables } from "@/lib/database.types";
+
+export type Periodo = Tables<"periodos">;
+export type Cuota = Tables<"cuotas">;
+export type LecturaAgua = Tables<"lecturas_agua">;
+export type ReciboServicio = Tables<"recibos_servicios">;
+export type Departamento = Tables<"departamentos">;
+
+export async function listPeriodos(): Promise<Periodo[]> {
+  const s = createClient();
+  const { data } = await s
+    .from("periodos")
+    .select("*")
+    .order("anio", { ascending: false })
+    .order("mes", { ascending: false });
+  return data ?? [];
+}
+
+export async function getPeriodo(id: number): Promise<Periodo | null> {
+  const s = createClient();
+  const { data } = await s.from("periodos").select("*").eq("id", id).maybeSingle();
+  return data ?? null;
+}
+
+// El único periodo en borrador (o null). La DB garantiza que hay como máximo uno.
+export async function getBorrador(): Promise<Periodo | null> {
+  const s = createClient();
+  const { data } = await s
+    .from("periodos")
+    .select("*")
+    .eq("estado", "borrador")
+    .maybeSingle();
+  return data ?? null;
+}
+
+export async function getDepartamentos(): Promise<Departamento[]> {
+  const s = createClient();
+  const { data } = await s.from("departamentos").select("*").order("id");
+  return data ?? [];
+}
+
+export async function getCuotas(periodoId: number): Promise<Cuota[]> {
+  const s = createClient();
+  const { data } = await s
+    .from("cuotas")
+    .select("*")
+    .eq("periodo_id", periodoId)
+    .order("dpto_id");
+  return data ?? [];
+}
+
+export async function getLecturas(periodoId: number): Promise<LecturaAgua[]> {
+  const s = createClient();
+  const { data } = await s
+    .from("lecturas_agua")
+    .select("*")
+    .eq("periodo_id", periodoId)
+    .order("dpto_id");
+  return data ?? [];
+}
+
+export async function getRecibos(periodoId: number): Promise<{
+  agua: ReciboServicio | null;
+  luz: ReciboServicio | null;
+}> {
+  const s = createClient();
+  const { data } = await s
+    .from("recibos_servicios")
+    .select("*")
+    .eq("periodo_id", periodoId);
+  const filas = data ?? [];
+  return {
+    agua: filas.find((r) => r.tipo === "agua") ?? null,
+    luz: filas.find((r) => r.tipo === "luz") ?? null,
+  };
+}
+
+// Lectura anterior por dpto = lectura_actual más reciente de un periodo previo
+// (por anio/mes). Si no hay historial, queda en 0 (primer mes).
+export async function getLecturasAnteriores(
+  anio: number,
+  mes: number,
+): Promise<Map<number, number>> {
+  const s = createClient();
+  const orden = anio * 12 + (mes - 1);
+  const { data: periodos } = await s.from("periodos").select("id, anio, mes");
+  const previos = (periodos ?? []).filter((p) => p.anio * 12 + (p.mes - 1) < orden);
+  const mapa = new Map<number, number>();
+  if (previos.length === 0) return mapa;
+
+  const idsOrdenados = previos
+    .sort((a, b) => a.anio * 12 + a.mes - (b.anio * 12 + b.mes))
+    .map((p) => p.id);
+
+  const { data: lecturas } = await s
+    .from("lecturas_agua")
+    .select("periodo_id, dpto_id, lectura_actual")
+    .in("periodo_id", idsOrdenados);
+
+  const rank = new Map(idsOrdenados.map((id, i) => [id, i]));
+  const mejorRank = new Map<number, number>();
+  for (const l of lecturas ?? []) {
+    const r = rank.get(l.periodo_id) ?? -1;
+    if (r > (mejorRank.get(l.dpto_id) ?? -1)) {
+      mejorRank.set(l.dpto_id, r);
+      mapa.set(l.dpto_id, l.lectura_actual);
+    }
+  }
+  return mapa;
+}
+
+// Consumo promedio (Δm3) por dpto en los últimos 6 periodos (para alerta de variación).
+export async function getPromediosConsumo(
+  excluirPeriodoId: number,
+): Promise<Map<number, number>> {
+  const s = createClient();
+  const { data: periodos } = await s
+    .from("periodos")
+    .select("id, anio, mes")
+    .order("anio", { ascending: false })
+    .order("mes", { ascending: false });
+  const ids = (periodos ?? [])
+    .filter((p) => p.id !== excluirPeriodoId)
+    .slice(0, 6)
+    .map((p) => p.id);
+
+  const mapa = new Map<number, number>();
+  if (ids.length === 0) return mapa;
+
+  const { data: lecturas } = await s
+    .from("lecturas_agua")
+    .select("dpto_id, lectura_anterior, lectura_actual")
+    .in("periodo_id", ids);
+
+  const acc = new Map<number, { sum: number; n: number }>();
+  for (const l of lecturas ?? []) {
+    const delta = l.lectura_actual - l.lectura_anterior;
+    const a = acc.get(l.dpto_id) ?? { sum: 0, n: 0 };
+    a.sum += delta;
+    a.n += 1;
+    acc.set(l.dpto_id, a);
+  }
+  for (const [dpto, a] of acc) mapa.set(dpto, a.n ? a.sum / a.n : 0);
+  return mapa;
+}
+
+export type EstadoCuentaDpto = {
+  dpto: number;
+  cargos: number;
+  abonos: number;
+  saldo: number;
+};
+
+// Estado de cuenta por dpto: Σ cuotas (cargos) vs Σ pagos (abonos), en periodos
+// emitidos o cerrados. saldo = cargos − abonos (positivo = debe).
+export async function getEstadosDeCuenta(): Promise<EstadoCuentaDpto[]> {
+  const s = createClient();
+  const { data: periodos } = await s
+    .from("periodos")
+    .select("id")
+    .in("estado", ["emitido", "cerrado"]);
+  const ids = (periodos ?? []).map((p) => p.id);
+
+  const cargos = new Map<number, number>();
+  const abonos = new Map<number, number>();
+
+  if (ids.length > 0) {
+    const { data: cuotas } = await s
+      .from("cuotas")
+      .select("id, dpto_id, total_cent")
+      .in("periodo_id", ids);
+    const cuotaDpto = new Map<number, number>();
+    for (const c of cuotas ?? []) {
+      cargos.set(c.dpto_id, (cargos.get(c.dpto_id) ?? 0) + c.total_cent);
+      cuotaDpto.set(c.id, c.dpto_id);
+    }
+    const cuotaIds = [...cuotaDpto.keys()];
+    if (cuotaIds.length > 0) {
+      const { data: pagos } = await s
+        .from("pagos")
+        .select("cuota_id, monto_cent")
+        .in("cuota_id", cuotaIds);
+      for (const p of pagos ?? []) {
+        const d = cuotaDpto.get(p.cuota_id);
+        if (d != null) abonos.set(d, (abonos.get(d) ?? 0) + p.monto_cent);
+      }
+    }
+  }
+
+  const dptos = new Set<number>([...cargos.keys(), ...abonos.keys()]);
+  return [...dptos]
+    .sort((a, b) => a - b)
+    .map((dpto) => {
+      const c = cargos.get(dpto) ?? 0;
+      const a = abonos.get(dpto) ?? 0;
+      return { dpto, cargos: c, abonos: a, saldo: c - a };
+    });
+}
+
+// Céntimos pagados por cuota (para semáforo y estado de cuenta).
+export async function getPagadoPorCuota(
+  periodoId: number,
+): Promise<Map<number, number>> {
+  const s = createClient();
+  const { data: cuotas } = await s
+    .from("cuotas")
+    .select("id")
+    .eq("periodo_id", periodoId);
+  const ids = (cuotas ?? []).map((c) => c.id);
+  const mapa = new Map<number, number>();
+  if (ids.length === 0) return mapa;
+
+  const { data: pagos } = await s
+    .from("pagos")
+    .select("cuota_id, monto_cent")
+    .in("cuota_id", ids);
+  for (const p of pagos ?? []) {
+    mapa.set(p.cuota_id, (mapa.get(p.cuota_id) ?? 0) + p.monto_cent);
+  }
+  return mapa;
+}
