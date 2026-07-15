@@ -284,6 +284,7 @@ export type Database = {
           medio: MedioPago;
           comprobante_url: string | null;
           nota: string | null;
+          contabilizado_en_periodo: number | null;
           registrado_por: string | null;
           registrado_en: string;
         };
@@ -295,6 +296,7 @@ export type Database = {
           medio?: MedioPago;
           comprobante_url?: string | null;
           nota?: string | null;
+          contabilizado_en_periodo?: number | null;
           registrado_por?: string | null;
           registrado_en?: string;
         };
@@ -306,6 +308,7 @@ export type Database = {
           medio?: MedioPago;
           comprobante_url?: string | null;
           nota?: string | null;
+          contabilizado_en_periodo?: number | null;
           registrado_por?: string | null;
           registrado_en?: string;
         };

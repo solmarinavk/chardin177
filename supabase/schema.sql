@@ -126,6 +126,9 @@ create table pagos (
   medio medio_pago not null default 'transferencia',
   comprobante_url text,
   nota text,
+  -- Cierre de caja que recogió este pago (NULL = aún en el mes abierto).
+  -- Lo fija cerrar_periodo(); un pago contabilizado es inmutable.
+  contabilizado_en_periodo bigint references periodos(id),
   registrado_por uuid references auth.users(id),
   registrado_en timestamptz not null default now()
 );
@@ -305,23 +308,30 @@ begin
    where id = p_periodo and estado='borrador';
 end $$;
 
--- Cerrar: fija saldos y abre el siguiente
+-- Cerrar: caja por fecha de cobro (como una caja real). Suma TODOS los pagos
+-- aún no contabilizados (del mes o atrasados de meses ya cerrados), fija el
+-- saldo final, marca esos pagos con este cierre y abre el mes siguiente con
+-- el saldo arrastrado.
 create or replace function cerrar_periodo(p_periodo bigint)
-returns bigint language plpgsql security definer as $$
+returns bigint language plpgsql security definer set search_path = public as $$
 declare
   v_ing integer; v_egr integer; v_ini integer; v_fin integer;
   v_anio smallint; v_mes smallint; v_next bigint;
 begin
-  select saldo_inicial_cent, anio, mes into v_ini, v_anio, v_mes
+  select coalesce(saldo_inicial_cent, 0), anio, mes into v_ini, v_anio, v_mes
     from periodos where id = p_periodo and estado='emitido';
   if not found then raise exception 'El periodo debe estar emitido'; end if;
 
-  select coalesce(sum(p.monto_cent),0) into v_ing
-    from pagos p join cuotas c on c.id=p.cuota_id where c.periodo_id = p_periodo;
+  select coalesce(sum(monto_cent),0) into v_ing
+    from pagos where contabilizado_en_periodo is null;
   select coalesce(sum(monto_cent),0) into v_egr
     from egresos where periodo_id = p_periodo and pagado;
 
-  v_fin := coalesce(v_ini,0) + v_ing - v_egr;
+  v_fin := v_ini + v_ing - v_egr;
+
+  update pagos set contabilizado_en_periodo = p_periodo
+   where contabilizado_en_periodo is null;
+
   update periodos set estado='cerrado', cerrado_en=now(), saldo_final_cent=v_fin
    where id = p_periodo;
 
@@ -390,6 +400,42 @@ create trigger tg_lock_lecturas before insert or update or delete on lecturas_ag
   for each row execute function fn_bloquea_emitido();
 create trigger tg_lock_recibos before insert or update or delete on recibos_servicios
   for each row execute function fn_bloquea_emitido();
+
+-- Un pago que ya entró a un cierre de caja es inmutable (correcciones: ajuste
+-- del periodo siguiente).
+create or replace function fn_bloquea_pago_contabilizado()
+returns trigger language plpgsql as $$
+begin
+  if old.contabilizado_en_periodo is not null then
+    raise exception 'Este pago ya entró al cierre de caja de un mes: no se puede modificar ni anular. Registra un ajuste en el periodo siguiente.';
+  end if;
+  return coalesce(new, old);
+end $$;
+create trigger tg_lock_pagos_contabilizados
+  before update or delete on pagos
+  for each row execute function fn_bloquea_pago_contabilizado();
+
+-- Los egresos de un periodo cerrado son inmutables (su caja ya cuadró).
+create or replace function fn_bloquea_egreso_cerrado()
+returns trigger language plpgsql as $$
+declare v_estado estado_periodo;
+begin
+  select estado into v_estado from periodos
+   where id = coalesce(new.periodo_id, old.periodo_id);
+  if v_estado = 'cerrado' then
+    raise exception 'El periodo ya está cerrado y su caja cuadrada: registra el egreso en el mes abierto.';
+  end if;
+  if tg_op = 'UPDATE' and new.periodo_id is distinct from old.periodo_id then
+    select estado into v_estado from periodos where id = new.periodo_id;
+    if v_estado = 'cerrado' then
+      raise exception 'No se puede mover un egreso a un periodo cerrado.';
+    end if;
+  end if;
+  return coalesce(new, old);
+end $$;
+create trigger tg_lock_egresos_cerrado
+  before insert or update or delete on egresos
+  for each row execute function fn_bloquea_egreso_cerrado();
 
 -- ---------- RLS ----------
 -- Helper de rol. SECURITY DEFINER es OBLIGATORIO: las políticas de `perfiles`
