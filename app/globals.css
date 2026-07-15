@@ -1,0 +1,36 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Mobile first, usuarios de 60+ años: base cómoda y de buen contraste. */
+:root {
+  color-scheme: light;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  @apply bg-slate-50 text-slate-900 antialiased;
+  font-size: 16px;
+}
+
+/* Botones grandes y accesibles por defecto */
+@layer components {
+  .btn {
+    @apply inline-flex min-h-[48px] items-center justify-center rounded-xl px-5 py-3 text-base font-semibold transition active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60;
+  }
+  .btn-primary {
+    @apply btn bg-slate-900 text-white hover:bg-slate-800;
+  }
+  .btn-secondary {
+    @apply btn border border-slate-300 bg-white text-slate-900 hover:bg-slate-100;
+  }
+  .campo {
+    @apply min-h-[48px] w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base outline-none focus:border-slate-900 focus:ring-2 focus:ring-slate-900/20;
+  }
+  .etiqueta {
+    @apply mb-1 block text-sm font-medium text-slate-700;
+  }
+}
