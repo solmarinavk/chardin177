@@ -9,6 +9,7 @@ import {
   getPromediosConsumo,
 } from "@/lib/periodos";
 import { etiquetaPeriodo } from "@/lib/fechas";
+import { BUCKET_MEDIDORES, urlFirmada } from "@/lib/storage";
 import { FormLecturas, type FilaLectura } from "@/components/forms/lecturas";
 import { guardarLecturas } from "./acciones";
 
@@ -53,15 +54,20 @@ export default async function LecturasPage() {
 
   const porDpto = new Map(lecturas.map((l) => [l.dpto_id, l]));
 
-  const filas: FilaLectura[] = departamentos.map((d) => {
-    const existente = porDpto.get(d.id);
-    return {
-      dpto: d.id,
-      anterior: existente?.lectura_anterior ?? anteriores.get(d.id) ?? 0,
-      actual: existente?.lectura_actual ?? null,
-      promedio: promedios.get(d.id) ?? null,
-    };
-  });
+  const filas: FilaLectura[] = await Promise.all(
+    departamentos.map(async (d) => {
+      const existente = porDpto.get(d.id);
+      return {
+        dpto: d.id,
+        anterior: existente?.lectura_anterior ?? anteriores.get(d.id) ?? 0,
+        actual: existente?.lectura_actual ?? null,
+        promedio: promedios.get(d.id) ?? null,
+        fotoUrl: existente?.foto_url
+          ? await urlFirmada(BUCKET_MEDIDORES, existente.foto_url)
+          : null,
+      };
+    }),
+  );
 
   return (
     <main className="flex flex-col gap-4">

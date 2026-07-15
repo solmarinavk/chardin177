@@ -6,6 +6,7 @@ export type Cuota = Tables<"cuotas">;
 export type LecturaAgua = Tables<"lecturas_agua">;
 export type ReciboServicio = Tables<"recibos_servicios">;
 export type Departamento = Tables<"departamentos">;
+export type Pago = Tables<"pagos">;
 
 export async function listPeriodos(): Promise<Periodo[]> {
   const s = createClient();
@@ -249,6 +250,34 @@ export async function getEstadosDeCuenta(): Promise<EstadoCuentaDpto[]> {
       const a = abonos.get(dpto) ?? 0;
       return { dpto, cargos: c, abonos: a, saldo: c - a };
     });
+}
+
+// Pagos completos de un periodo, agrupados por cuota (para la lista de
+// cobranza: ver el detalle de cada pago y poder anularlo).
+export async function getPagosPorCuota(
+  periodoId: number,
+): Promise<Map<number, Pago[]>> {
+  const s = createClient();
+  const { data: cuotas } = await s
+    .from("cuotas")
+    .select("id")
+    .eq("periodo_id", periodoId);
+  const ids = (cuotas ?? []).map((c) => c.id);
+  const mapa = new Map<number, Pago[]>();
+  if (ids.length === 0) return mapa;
+
+  const { data: pagos } = await s
+    .from("pagos")
+    .select("*")
+    .in("cuota_id", ids)
+    .order("fecha_pago")
+    .order("id");
+  for (const p of pagos ?? []) {
+    const lista = mapa.get(p.cuota_id) ?? [];
+    lista.push(p);
+    mapa.set(p.cuota_id, lista);
+  }
+  return mapa;
 }
 
 // Céntimos pagados por cuota (para semáforo y estado de cuenta).

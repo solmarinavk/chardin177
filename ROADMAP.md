@@ -27,6 +27,8 @@ Cada fase es una serie de sesiones de Claude Code. Marca los checkboxes al compl
 - [x] 1.7 Módulo de pagos (tesorería): en el periodo emitido, marcar pago por dpto con monto (predefinido = pendiente), fecha, medio (yape/plin/transferencia/efectivo), comprobante. Soporta pago parcial.
 - [x] 1.8 **Semáforo público**: página del periodo con los 10 dptos en verde (pagó) / ámbar (parcial) / rojo (pendiente), visible para todo residente logueado.
 - [x] 1.9 Estado de cuenta por dpto: cargos vs abonos, saldo. El residente ve el suyo (y el semáforo general). _(/estado-cuenta)_
+- [x] 1.10 PWA instalable (pedida 15/07/2026): manifest + iconos + modo standalone, para agregar la app a la pantalla de inicio del celular como una app nativa.
+- [x] 1.11 Ajustes de la auditoría por roles (15/07/2026): guardado parcial de lecturas, anular pagos equivocados, ver las fotos subidas (recibos/comprobantes/medidores), y cierre de módulos financieros para portería a nivel UI. Detalle en `docs/AUDITORIA_ROLES.md`.
 
 **Salida de fase:** la operación mensual básica ya no necesita el Excel. _(Motor y ciclo de vida verificados con tests contra Postgres real; falta prueba del UI en vivo — pendiente de habilitar el acceso de red a Supabase, ver docs/FASE_1.md.)_
 
@@ -57,6 +59,9 @@ Cada fase es una serie de sesiones de Claude Code. Marca los checkboxes al compl
 
 ## Backlog (ideas futuras, no bloquean nada)
 
+- [ ] Residente sube su constancia de pago para que tesorería la confirme (PROPUESTA §5, opcional)
+- [ ] Modo offline para la PWA (service worker con caché del último estado)
+- [ ] Decidir en junta si portería debe poder LEER datos financieros vía API (hoy el schema da lectura a todo autenticado por transparencia; la UI ya se lo oculta)
 - [ ] PIN de acceso rápido para portería
 - [ ] Registro de incidencias/mantenimientos del edificio
 - [ ] Reserva de áreas comunes

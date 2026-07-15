@@ -14,11 +14,13 @@ export function FormRecibo({
   periodoId,
   tipo,
   montoActualCent,
+  fotoUrl = null,
 }: {
   accion: Accion;
   periodoId: number;
   tipo: TipoRecibo;
   montoActualCent: number | null;
+  fotoUrl?: string | null;
 }) {
   const [estado, formAction] = useFormState(accion, ESTADO_INICIAL);
   const etiqueta = tipo === "agua" ? "Agua (Sedapal)" : "Luz común";
@@ -70,6 +72,16 @@ export function FormRecibo({
           name="foto"
           etiqueta="Foto del recibo (opcional)"
         />
+        {fotoUrl && (
+          <a
+            href={fotoUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="mt-1 inline-block text-xs font-semibold text-slate-500 underline hover:text-slate-900"
+          >
+            Ver la foto ya guardada
+          </a>
+        )}
       </div>
 
       <BotonEnviar className="btn-secondary mt-3 w-full">

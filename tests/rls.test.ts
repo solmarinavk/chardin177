@@ -200,6 +200,38 @@ describe("RLS por rol (flujo real del mes)", () => {
     expect(e.rows[0]!.estado).toBe("pendiente");
   });
 
+  it("anular pago: residente NO puede (silencioso), tesorería SÍ y la cuota vuelve a pendiente", async () => {
+    const pago = await db.query<{ id: number; cuota_id: number }>(
+      `select id, cuota_id from pagos limit 1`,
+    );
+    const { id: pagoId, cuota_id: cuotaId } = pago.rows[0]!;
+
+    // Residente: DELETE sin política no da error, simplemente no borra nada.
+    await actuarComo(db, UID.residente);
+    await db.query(`delete from pagos where id = $1`, [pagoId]);
+    await actuarComoServidor(db);
+    const sigue = await db.query<{ n: number }>(
+      `select count(*)::int as n from pagos where id = $1`,
+      [pagoId],
+    );
+    expect(sigue.rows[0]!.n).toBe(1);
+
+    // Tesorería: sí puede anular y el trigger recalcula el estado.
+    await actuarComo(db, UID.tesoreria);
+    await db.query(`delete from pagos where id = $1`, [pagoId]);
+    await actuarComoServidor(db);
+    const borrado = await db.query<{ n: number }>(
+      `select count(*)::int as n from pagos where id = $1`,
+      [pagoId],
+    );
+    expect(borrado.rows[0]!.n).toBe(0);
+    const estado = await db.query<{ estado: string }>(
+      `select estado from cuotas where id = $1`,
+      [cuotaId],
+    );
+    expect(estado.rows[0]!.estado).toBe("pendiente");
+  });
+
   it("la bitácora solo la lee admin (portería ve 0 filas)", async () => {
     await actuarComo(db, UID.porteria);
     const comoPorteria = await db.query<{ n: number }>(

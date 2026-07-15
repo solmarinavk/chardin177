@@ -187,3 +187,27 @@ export async function registrarPago(
   if (periodoId !== null) revalidatePath(`/periodos/${periodoId}`);
   return { ok: true, error: null, mensaje: "Pago registrado." };
 }
+
+// 1.7 · Anular un pago mal registrado (error de digitación). El trigger de la
+// base recalcula el estado de la cuota y la anulación queda en audit_log.
+export async function anularPago(
+  _prev: EstadoForm,
+  formData: FormData,
+): Promise<EstadoForm> {
+  await requireRol(TESORERIA);
+  const pagoId = enteroDesdeInput(formData.get("pago_id"));
+  const periodoId = enteroDesdeInput(formData.get("periodo_id"));
+  if (pagoId === null) return { ok: false, error: "Pago inválido." };
+
+  const s = createClient();
+  const { error, count } = await s
+    .from("pagos")
+    .delete({ count: "exact" })
+    .eq("id", pagoId);
+  if (error) return { ok: false, error: mensajeError(error) };
+  if (count === 0)
+    return { ok: false, error: "No se encontró el pago (¿ya fue anulado?)." };
+
+  if (periodoId !== null) revalidatePath(`/periodos/${periodoId}`);
+  return { ok: true, error: null, mensaje: "Pago anulado." };
+}

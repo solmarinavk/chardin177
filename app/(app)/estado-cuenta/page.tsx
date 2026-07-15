@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { getPerfil } from "@/lib/roles";
+import { requireRol } from "@/lib/roles";
 import { getEstadosDeCuenta } from "@/lib/periodos";
 import { formatoPEN } from "@/lib/centimos";
 import { IconoCheck } from "@/components/iconos";
@@ -8,8 +8,8 @@ import { IconoCheck } from "@/components/iconos";
 export const metadata: Metadata = { title: "Estado de cuenta" };
 
 export default async function EstadoCuentaPage() {
-  const perfil = await getPerfil();
-  if (!perfil) return null;
+  // Portería solo usa lecturas (PROPUESTA §5).
+  const perfil = await requireRol(["tesoreria", "admin", "residente"]);
 
   const todos = await getEstadosDeCuenta();
   // Si el perfil está asociado a un dpto, muestra solo el suyo; si no
@@ -78,7 +78,7 @@ export default async function EstadoCuentaPage() {
             className="animar-aparecer overflow-x-auto rounded-xl border border-slate-200 bg-white"
             style={{ animationDelay: "60ms" }}
           >
-            <table className="num w-full min-w-[440px] text-right text-sm">
+            <table className="num w-full min-w-[400px] text-right text-sm">
               <thead className="bg-slate-100 text-xs uppercase tracking-wide text-slate-500">
                 <tr>
                   <th className="px-3 py-2.5 text-left">Dpto</th>

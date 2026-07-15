@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { getPerfil } from "@/lib/roles";
+import { requireRol } from "@/lib/roles";
 import { listPeriodos, getBorrador } from "@/lib/periodos";
 import { etiquetaPeriodo, hoyLima } from "@/lib/fechas";
 import { formatoPEN } from "@/lib/centimos";
@@ -12,8 +12,8 @@ import { crearPeriodo } from "./acciones";
 export const metadata: Metadata = { title: "Periodos" };
 
 export default async function PeriodosPage() {
-  const perfil = await getPerfil();
-  if (!perfil) return null;
+  // Portería solo usa lecturas (PROPUESTA §5).
+  const perfil = await requireRol(["tesoreria", "admin", "residente"]);
   const puedeGestionar = perfil.rol === "tesoreria" || perfil.rol === "admin";
 
   const [periodos, borrador] = await Promise.all([listPeriodos(), getBorrador()]);

@@ -15,6 +15,7 @@ export type FilaLectura = {
   anterior: number;
   actual: number | null;
   promedio: number | null; // consumo promedio 6 meses (para alerta)
+  fotoUrl: string | null; // URL firmada de la foto ya guardada (si hay)
 };
 
 export function FormLecturas({
@@ -136,7 +137,6 @@ export function FormLecturas({
                     inputMode="numeric"
                     enterKeyHint="next"
                     min={0}
-                    required
                     value={v.actual}
                     onChange={(e) => set(f.dpto, "actual", e.target.value)}
                     className={`campo num ${menor ? "border-red-500 ring-2 ring-red-200" : ""}`}
@@ -168,6 +168,16 @@ export function FormLecturas({
                   etiqueta="Foto del medidor (opcional)"
                   camara
                 />
+                {f.fotoUrl && (
+                  <a
+                    href={f.fotoUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-1 inline-block text-xs font-semibold text-slate-500 underline hover:text-slate-900"
+                  >
+                    Ver la foto ya guardada
+                  </a>
+                )}
               </div>
             </li>
           );

@@ -1,11 +1,17 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { getPerfil } from "@/lib/roles";
-import { getPeriodo, getResumenPeriodo, type ResumenPeriodo } from "@/lib/periodos";
+import { requireRol } from "@/lib/roles";
+import {
+  getPeriodo,
+  getResumenPeriodo,
+  getPagosPorCuota,
+  type ResumenPeriodo,
+} from "@/lib/periodos";
 import { pasosDelMes } from "@/lib/flujo";
-import { etiquetaPeriodo, hoyLima } from "@/lib/fechas";
+import { etiquetaPeriodo, formatoFecha, hoyLima } from "@/lib/fechas";
 import { formatoPEN } from "@/lib/centimos";
+import { BUCKET_COMPROBANTES, urlFirmada } from "@/lib/storage";
 import { EstadoPeriodoBadge } from "@/components/estados";
 import { CuotasDesglose } from "@/components/CuotasDesglose";
 import { Semaforo } from "@/components/Semaforo";
@@ -15,12 +21,22 @@ import { FormRecibo } from "@/components/forms/recibo";
 import { FormAccionPeriodo } from "@/components/forms/periodo";
 import { FormPago } from "@/components/forms/pago";
 import { IconoFlecha, IconoCheck, IconoAlerta, IconoGota } from "@/components/iconos";
+import { FormAnularPago } from "@/components/forms/anular-pago";
 import {
   guardarRecibo,
   generarCuotas,
   emitirPeriodo,
   registrarPago,
+  anularPago,
 } from "../acciones";
+
+const MEDIO_TEXTO: Record<string, string> = {
+  yape: "Yape",
+  plin: "Plin",
+  transferencia: "Transferencia",
+  efectivo: "Efectivo",
+  otro: "Otro",
+};
 
 export const metadata: Metadata = { title: "Periodo" };
 
@@ -32,8 +48,9 @@ export default async function PeriodoDetallePage({
   const id = Number(params.id);
   if (!Number.isInteger(id)) notFound();
 
-  const perfil = await getPerfil();
-  if (!perfil) return null;
+  // Portería solo usa el módulo de lecturas (PROPUESTA §5); los datos
+  // financieros del periodo son para tesorería, admin y residentes.
+  const perfil = await requireRol(["tesoreria", "admin", "residente"]);
 
   const periodo = await getPeriodo(id);
   if (!periodo) notFound();
@@ -51,6 +68,14 @@ export default async function PeriodoDetallePage({
   const cuotasGeneradas = resumen.cuotas.length === 10;
   const listoParaGenerar =
     resumen.reciboAgua && resumen.reciboLuz && resumen.lecturas === 10;
+
+  // URLs firmadas de las fotos de los recibos (buckets privados).
+  const fotoAgua = resumen.recibos.agua?.foto_url
+    ? await urlFirmada(BUCKET_COMPROBANTES, resumen.recibos.agua.foto_url)
+    : null;
+  const fotoLuz = resumen.recibos.luz?.foto_url
+    ? await urlFirmada(BUCKET_COMPROBANTES, resumen.recibos.luz.foto_url)
+    : null;
 
   return (
     <main className="flex flex-col gap-5">
@@ -119,12 +144,14 @@ export default async function PeriodoDetallePage({
                   periodoId={id}
                   tipo="agua"
                   montoActualCent={resumen.recibos.agua?.monto_cent ?? null}
+                  fotoUrl={fotoAgua}
                 />
                 <FormRecibo
                   accion={guardarRecibo}
                   periodoId={id}
                   tipo="luz"
                   montoActualCent={resumen.recibos.luz?.monto_cent ?? null}
+                  fotoUrl={fotoLuz}
                 />
               </div>
             </section>
@@ -160,6 +187,12 @@ export default async function PeriodoDetallePage({
                 textoEnviando="Calculando…"
                 className="btn-primary w-full"
               />
+              {cuotasGeneradas && (
+                <p className="mt-2 text-xs text-slate-500">
+                  Si después de calcular cambias alguna lectura o recibo, vuelve a
+                  calcular antes de emitir.
+                </p>
+              )}
             </section>
           )}
 
@@ -247,6 +280,32 @@ export default async function PeriodoDetallePage({
               recibos={resumen.recibos}
               mostrarEstado
             />
+            {(fotoAgua || fotoLuz) && (
+              <p className="mt-3 text-sm text-slate-600">
+                Recibos del mes:{" "}
+                {fotoAgua && (
+                  <a
+                    href={fotoAgua}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="font-semibold underline underline-offset-2 hover:text-slate-900"
+                  >
+                    foto del recibo de agua
+                  </a>
+                )}
+                {fotoAgua && fotoLuz && " · "}
+                {fotoLuz && (
+                  <a
+                    href={fotoLuz}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="font-semibold underline underline-offset-2 hover:text-slate-900"
+                  >
+                    foto del recibo de luz
+                  </a>
+                )}
+              </p>
+            )}
           </section>
 
           {periodo.estado === "cerrado" && (
@@ -278,8 +337,9 @@ export default async function PeriodoDetallePage({
   );
 }
 
-// Sección de cobranza por dpto (tesorería/admin, periodo emitido).
-function PagosSection({
+// Sección de cobranza por dpto (tesorería/admin, periodo emitido): registrar
+// pagos, ver el historial con comprobantes, y anular errores de digitación.
+async function PagosSection({
   resumen,
   periodoId,
 }: {
@@ -287,57 +347,106 @@ function PagosSection({
   periodoId: number;
 }) {
   const hoy = hoyLima();
-  const pendientes = resumen.cuotas.filter((c) => c.estado !== "pagado");
+  const pagosPorCuota = await getPagosPorCuota(periodoId);
+  const todoPagado = resumen.cuotas.every((c) => c.estado === "pagado");
+
+  // URLs firmadas de los comprobantes (los buckets son privados).
+  const urlsComprobante = new Map<number, string>();
+  for (const pagos of pagosPorCuota.values()) {
+    for (const p of pagos) {
+      if (p.comprobante_url) {
+        const url = await urlFirmada(BUCKET_COMPROBANTES, p.comprobante_url);
+        if (url) urlsComprobante.set(p.id, url);
+      }
+    }
+  }
 
   return (
     <section id="pagos" className="card animar-aparecer scroll-mt-24 p-5">
-      <h2 className="titulo-seccion mb-3">Registrar pagos</h2>
-      {pendientes.length === 0 ? (
-        <p className="flex items-center gap-1.5 font-medium text-emerald-700">
+      <h2 className="titulo-seccion mb-3">Cobranza</h2>
+      {todoPagado && (
+        <p className="mb-3 flex items-center gap-1.5 font-medium text-emerald-700">
           <IconoCheck className="h-5 w-5" />
           ¡Todos los departamentos pagaron! 🎉
         </p>
-      ) : (
-        <ul className="flex flex-col gap-2">
-          {resumen.cuotas.map((c) => {
-            const pagadoCent = resumen.pagadoPorCuota.get(c.id) ?? 0;
-            const saldo = c.total_cent - pagadoCent;
-            return (
-              <li key={c.id} className="rounded-xl border border-slate-200 p-3">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-bold text-slate-900">Dpto {c.dpto_id}</span>
-                  <span className="num text-sm text-slate-600">
-                    {formatoPEN(pagadoCent)} / {formatoPEN(c.total_cent)}
-                  </span>
-                </div>
-                {saldo <= 0 ? (
-                  <p className="mt-1 flex items-center gap-1 text-sm font-medium text-emerald-700">
-                    <IconoCheck className="h-4 w-4" />
-                    Pagado
-                  </p>
-                ) : (
-                  <details className="group">
-                    <summary className="mt-1 flex cursor-pointer list-none items-center gap-1 text-sm font-semibold text-slate-700 hover:text-slate-900">
-                      <IconoFlecha className="h-3.5 w-3.5 transition-transform group-open:rotate-90" />
-                      Registrar pago
-                      <span className="num font-normal text-slate-500">
-                        (debe {formatoPEN(saldo)})
-                      </span>
-                    </summary>
-                    <FormPago
-                      accion={registrarPago}
-                      periodoId={periodoId}
-                      cuotaId={c.id}
-                      saldoPendienteCent={saldo}
-                      fechaHoy={hoy}
-                    />
-                  </details>
-                )}
-              </li>
-            );
-          })}
-        </ul>
       )}
+      <ul className="flex flex-col gap-2">
+        {resumen.cuotas.map((c) => {
+          const pagadoCent = resumen.pagadoPorCuota.get(c.id) ?? 0;
+          const saldo = c.total_cent - pagadoCent;
+          const pagos = pagosPorCuota.get(c.id) ?? [];
+          return (
+            <li key={c.id} className="rounded-xl border border-slate-200 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-bold text-slate-900">Dpto {c.dpto_id}</span>
+                <span className="num text-sm text-slate-600">
+                  {formatoPEN(pagadoCent)} / {formatoPEN(c.total_cent)}
+                </span>
+              </div>
+
+              {pagos.length > 0 && (
+                <ul className="mt-2 flex flex-col gap-1 border-t border-slate-100 pt-2">
+                  {pagos.map((p) => (
+                    <li
+                      key={p.id}
+                      className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-sm"
+                    >
+                      <span className="num text-slate-600">
+                        {formatoFecha(p.fecha_pago)} · {MEDIO_TEXTO[p.medio] ?? p.medio} ·{" "}
+                        <span className="font-semibold text-slate-900">
+                          {formatoPEN(p.monto_cent)}
+                        </span>
+                      </span>
+                      <span className="flex items-center gap-2">
+                        {urlsComprobante.has(p.id) && (
+                          <a
+                            href={urlsComprobante.get(p.id)}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-xs font-semibold text-slate-500 underline underline-offset-2 hover:text-slate-900"
+                          >
+                            Comprobante
+                          </a>
+                        )}
+                        <FormAnularPago
+                          accion={anularPago}
+                          pagoId={p.id}
+                          periodoId={periodoId}
+                          descripcion={`${formatoPEN(p.monto_cent)} del dpto ${c.dpto_id}`}
+                        />
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              {saldo <= 0 ? (
+                <p className="mt-1 flex items-center gap-1 text-sm font-medium text-emerald-700">
+                  <IconoCheck className="h-4 w-4" />
+                  Pagado
+                </p>
+              ) : (
+                <details className="group">
+                  <summary className="mt-1 flex cursor-pointer list-none items-center gap-1 text-sm font-semibold text-slate-700 hover:text-slate-900">
+                    <IconoFlecha className="h-3.5 w-3.5 transition-transform group-open:rotate-90" />
+                    Registrar pago
+                    <span className="num font-normal text-slate-500">
+                      (debe {formatoPEN(saldo)})
+                    </span>
+                  </summary>
+                  <FormPago
+                    accion={registrarPago}
+                    periodoId={periodoId}
+                    cuotaId={c.id}
+                    saldoPendienteCent={saldo}
+                    fechaHoy={hoy}
+                  />
+                </details>
+              )}
+            </li>
+          );
+        })}
+      </ul>
     </section>
   );
 }

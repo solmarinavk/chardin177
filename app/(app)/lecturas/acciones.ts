@@ -9,7 +9,9 @@ import type { Database } from "@/lib/database.types";
 
 type LecturaInsert = Database["public"]["Tables"]["lecturas_agua"]["Insert"];
 
-// 1.2 · Guardar las lecturas de los 10 dptos del periodo en borrador.
+// 1.2 · Guardar las lecturas del periodo en borrador. Acepta guardado PARCIAL:
+// el portero puede subir piso por piso; los dptos con la casilla vacía se
+// omiten sin perder lo ya guardado.
 export async function guardarLecturas(
   _prev: EstadoForm,
   formData: FormData,
@@ -31,13 +33,19 @@ export async function guardarLecturas(
   } = await s.auth.getUser();
 
   const filas: LecturaInsert[] = [];
+  let omitidas = 0;
   for (const dpto of dptos) {
+    const actualRaw = formData.get(`actual_${dpto}`);
+    if (actualRaw === null || String(actualRaw).trim() === "") {
+      omitidas += 1; // casilla vacía: se guarda después, no es error
+      continue;
+    }
     const anterior = enteroDesdeInput(formData.get(`anterior_${dpto}`));
-    const actual = enteroDesdeInput(formData.get(`actual_${dpto}`));
+    const actual = enteroDesdeInput(actualRaw);
     if (anterior === null || anterior < 0)
       return { ok: false, error: `Lectura anterior inválida en el dpto ${dpto}.` };
     if (actual === null)
-      return { ok: false, error: `Falta la lectura actual del dpto ${dpto}.` };
+      return { ok: false, error: `Lectura actual inválida en el dpto ${dpto}.` };
     if (actual < anterior)
       return {
         ok: false,
@@ -67,6 +75,9 @@ export async function guardarLecturas(
     });
   }
 
+  if (filas.length === 0)
+    return { ok: false, error: "Ingresa al menos una lectura antes de guardar." };
+
   const { error } = await s
     .from("lecturas_agua")
     .upsert(filas, { onConflict: "periodo_id,dpto_id" });
@@ -78,5 +89,12 @@ export async function guardarLecturas(
 
   revalidatePath(`/periodos/${periodoId}`);
   revalidatePath("/lecturas");
-  return { ok: true, error: null, mensaje: "Lecturas guardadas." };
+  return {
+    ok: true,
+    error: null,
+    mensaje:
+      omitidas > 0
+        ? `Se guardaron ${filas.length} lectura${filas.length === 1 ? "" : "s"}. Faltan ${omitidas}.`
+        : "¡Las 10 lecturas quedaron guardadas! 🎉",
+  };
 }
