@@ -6,13 +6,13 @@ Cada fase es una serie de sesiones de Claude Code. Marca los checkboxes al compl
 
 ## FASE 0 · Fundaciones (1 a 2 sesiones)
 
-- [ ] 0.1 Inicializar Next.js 14 + TypeScript + Tailwind. Configurar `netlify.toml` con el plugin de Next.js. Primer deploy a Netlify (página "Chardin 177, próximamente").
-- [ ] 0.2 Crear proyecto en Supabase (región `sa-east-1`). Guardar keys en `.env.local` y en Netlify env vars.
-- [ ] 0.3 Aplicar `supabase/schema.sql` como primera migración. Verificar que las 10 filas de `departamentos` y los datos semilla existen.
-- [ ] 0.4 Auth con magic link. Página de login. Hook `useSession`. Tabla `perfiles` conectada a `auth.users` con trigger de alta.
-- [ ] 0.5 Sistema de roles: helper `getRol()`, layout protegido por rol, página de "sin acceso".
-- [ ] 0.6 Crear los 4 usuarios reales iniciales (admin, tesorería, portería, 1 residente de prueba) y verificar RLS a mano: el portero NO puede leer pagos, el residente NO puede escribir nada.
-- [ ] 0.7 `lib/centimos.ts`: helpers `aCentimos`, `aSoles`, `formatoPEN`, `prorratear` (con la regla del residuo al mayor consumidor) + tests unitarios.
+- [x] 0.1 Inicializar Next.js 14 + TypeScript + Tailwind. Configurar `netlify.toml` con el plugin de Next.js. Primer deploy a Netlify (página "Chardin 177, próximamente"). _(Código y config listos; el deploy es el Paso 5 de la guía, lo haces tú.)_
+- [ ] 0.2 Crear proyecto en Supabase (región `sa-east-1`). Guardar keys en `.env.local` y en Netlify env vars. _(Paso manual tuyo en supabase.com; ver resumen.)_
+- [x] 0.3 Aplicar `supabase/schema.sql` como primera migración. Verificar que las 10 filas de `departamentos` y los datos semilla existen. _(Migración `supabase/migrations/0001_schema_inicial.sql` + `supabase/verificar_semilla.sql`.)_
+- [x] 0.4 Auth con magic link. Página de login. Hook `useSession`. Tabla `perfiles` conectada a `auth.users` con trigger de alta. _(Implementado con **email + contraseña** y `scripts/seed_perfiles.ts`, según el Prompt Maestro, no magic link.)_
+- [x] 0.5 Sistema de roles: helper `getRol()`, layout protegido por rol, página de "sin acceso".
+- [ ] 0.6 Crear los 4 usuarios reales iniciales (admin, tesorería, portería, 1 residente de prueba) y verificar RLS a mano: el portero NO puede leer pagos, el residente NO puede escribir nada. _(Los usuarios se crean en Supabase Auth + `npm run seed:perfiles`; pasos en el resumen.)_
+- [x] 0.7 `lib/centimos.ts`: helpers `aCentimos`, `aSoles`, `formatoPEN`, `prorratear` (con la regla del residuo al mayor consumidor) + tests unitarios.
 
 **Salida de fase:** app deployada con login funcionando y base de datos viva con RLS.
 
