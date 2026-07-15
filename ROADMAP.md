@@ -34,11 +34,11 @@ Cada fase es una serie de sesiones de Claude Code. Marca los checkboxes al compl
 
 ## FASE 2 · Caja completa y transparencia (2 a 3 sesiones)
 
-- [ ] 2.1 Módulo de egresos: concepto, categoría (catálogo del edificio), monto, fecha, comprobante, pagado sí/no. Lista filtrable.
-- [ ] 2.2 Libro de caja del periodo: saldo inicial (auto), ingresos (Σ pagos), egresos, saldo actual en vivo.
-- [ ] 2.3 Cierre de mes: botón **Cerrar** (tesorería) que valida que no queden cuotas pendientes sin decisión (o las pasa a cuenta corriente como deuda), fija saldo_final y crea el periodo siguiente con saldo arrastrado.
-- [ ] 2.4 Dashboard de transparencia (home para residentes): saldo de caja, semáforo del mes, últimos 10 egresos con comprobante, gráfico de consumo de agua por dpto de los últimos 6 meses, provisiones.
-- [ ] 2.5 Morosidad: vista de deudas acumuladas por dpto entre periodos, con antigüedad.
+- [x] 2.1 Módulo de egresos: concepto, categoría (catálogo del edificio), monto, fecha, comprobante, pagado sí/no. Lista filtrable. _(/caja, con marcar pagado/por pagar y anular)_
+- [x] 2.2 Libro de caja del periodo: saldo inicial (auto), ingresos (Σ pagos), egresos, saldo actual en vivo. _(/caja + resumen en el cierre; requiere migración 0005)_
+- [x] 2.3 Cierre de mes: botón **Cerrar** (tesorería) que valida que no queden cuotas pendientes sin decisión (o las pasa a cuenta corriente como deuda), fija saldo_final y crea el periodo siguiente con saldo arrastrado. _(Paso 6 del GPS; los pagos atrasados de meses cerrados entran a la caja del mes en que se cobran — migración 0005)_
+- [x] 2.4 Dashboard de transparencia (home para residentes): saldo de caja, semáforo del mes, últimos 10 egresos con comprobante, gráfico de consumo de agua por dpto de los últimos 6 meses, provisiones. _(/inicio; el gráfico es small multiples accesible)_
+- [x] 2.5 Morosidad: vista de deudas acumuladas por dpto entre periodos, con antigüedad. _(sección "Deudas por departamento" en /estado-cuenta)_
 
 ## FASE 3 · Fino operativo (2 a 3 sesiones)
 
