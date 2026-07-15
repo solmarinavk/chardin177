@@ -339,10 +339,10 @@ begin
   v_cuota := coalesce(new.cuota_id, old.cuota_id);
   select total_cent into v_total from cuotas where id = v_cuota;
   select coalesce(sum(monto_cent),0) into v_pagado from pagos where cuota_id = v_cuota;
-  update cuotas set estado = case
+  update cuotas set estado = (case
       when v_pagado = 0 then 'pendiente'
       when v_pagado < v_total then 'parcial'
-      else 'pagado' end
+      else 'pagado' end)::estado_cuota
    where id = v_cuota;
   return null;
 end $$;
