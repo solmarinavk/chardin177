@@ -485,7 +485,17 @@ export type Database = {
           despues?: Json | null;
           creado_en?: string;
         };
-        Update: never;
+        // Insert-only en la práctica (RLS + triggers), pero el tipo debe ser un objeto válido.
+        Update: {
+          id?: number;
+          tabla?: string;
+          registro_id?: string;
+          accion?: string;
+          usuario?: string | null;
+          antes?: Json | null;
+          despues?: Json | null;
+          creado_en?: string;
+        };
         Relationships: [];
       };
     };
