@@ -9,28 +9,68 @@
 
 html {
   -webkit-text-size-adjust: 100%;
+  scroll-behavior: smooth;
 }
 
 body {
-  @apply bg-slate-50 text-slate-900 antialiased;
+  @apply bg-slate-100 text-slate-900 antialiased;
   font-size: 16px;
 }
 
 /* Botones grandes y accesibles por defecto */
 @layer components {
   .btn {
-    @apply inline-flex min-h-[48px] items-center justify-center rounded-xl px-5 py-3 text-base font-semibold transition active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60;
+    @apply inline-flex min-h-[48px] items-center justify-center gap-2 rounded-xl px-5 py-3 text-base font-semibold transition-all active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2;
   }
   .btn-primary {
-    @apply btn bg-slate-900 text-white hover:bg-slate-800;
+    @apply btn bg-slate-900 text-white shadow-sm hover:bg-slate-700 hover:shadow-md;
   }
   .btn-secondary {
-    @apply btn border border-slate-300 bg-white text-slate-900 hover:bg-slate-100;
+    @apply btn border border-slate-300 bg-white text-slate-900 hover:bg-slate-50;
   }
   .campo {
-    @apply min-h-[48px] w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base outline-none focus:border-slate-900 focus:ring-2 focus:ring-slate-900/20;
+    @apply min-h-[48px] w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base outline-none transition focus:border-slate-900 focus:ring-2 focus:ring-slate-900/15;
   }
   .etiqueta {
-    @apply mb-1 block text-sm font-medium text-slate-700;
+    @apply mb-1 block text-sm font-medium text-slate-600;
+  }
+  .card {
+    @apply rounded-2xl border border-slate-200 bg-white shadow-sm;
+  }
+  .titulo-seccion {
+    @apply text-xs font-bold uppercase tracking-widest text-slate-400;
+  }
+  .chip {
+    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold;
+  }
+}
+
+@layer utilities {
+  /* Números de dinero alineados (tabulares) */
+  .num {
+    font-variant-numeric: tabular-nums;
+  }
+
+  @keyframes aparecer {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  .animar-aparecer {
+    animation: aparecer 0.35s ease-out both;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  .animar-aparecer {
+    animation: none;
   }
 }

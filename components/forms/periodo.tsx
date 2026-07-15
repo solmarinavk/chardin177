@@ -2,6 +2,7 @@
 
 import { useFormState } from "react-dom";
 import { BotonEnviar } from "@/components/BotonEnviar";
+import { IconoCheck } from "@/components/iconos";
 import { ESTADO_INICIAL, type EstadoForm } from "@/lib/formularios";
 import { nombreMes } from "@/lib/fechas";
 
@@ -11,12 +12,15 @@ function Mensajes({ estado }: { estado: EstadoForm }) {
   return (
     <>
       {estado.error && (
-        <p role="alert" className="mt-2 text-sm font-medium text-red-700">
+        <p role="alert" className="mt-2 rounded-xl bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
           {estado.error}
         </p>
       )}
       {estado.ok && estado.mensaje && (
-        <p className="mt-2 text-sm font-medium text-green-700">{estado.mensaje}</p>
+        <p className="mt-2 flex items-center gap-1.5 rounded-xl bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800">
+          <IconoCheck className="h-4 w-4" />
+          {estado.mensaje}
+        </p>
       )}
     </>
   );
@@ -55,10 +59,11 @@ export function FormCrearPeriodo({
             id="anio"
             name="anio"
             type="number"
+            inputMode="numeric"
             defaultValue={defaultAnio}
             min={2020}
             max={2100}
-            className="campo"
+            className="campo num"
           />
         </div>
       </div>

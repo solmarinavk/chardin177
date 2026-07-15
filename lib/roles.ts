@@ -12,6 +12,23 @@ export const ETIQUETA_ROL: Record<RolUsuario, string> = {
   residente: "Residente",
 };
 
+// "Nombre · Rol", sin repetir cuando el nombre ya es el rol (las cuentas
+// compartidas se llaman igual que su rol: "Tesorería", "Portería"…).
+export function nombreConRol(perfil: Perfil): string {
+  const etiqueta = ETIQUETA_ROL[perfil.rol];
+  if (perfil.nombre.toLowerCase().includes(etiqueta.toLowerCase())) {
+    return perfil.nombre;
+  }
+  return `${perfil.nombre} · ${etiqueta}`;
+}
+
+// ¿El rol aporta información que el nombre no tiene?
+export function rolEsRedundante(perfil: Perfil): boolean {
+  return perfil.nombre
+    .toLowerCase()
+    .includes(ETIQUETA_ROL[perfil.rol].toLowerCase());
+}
+
 // Perfil del usuario logueado (o null si no hay sesión / no tiene perfil).
 // `cache` deduplica la consulta dentro de un mismo request.
 export const getPerfil = cache(async (): Promise<Perfil | null> => {
@@ -61,6 +78,8 @@ export async function requireRol(roles: RolUsuario[]): Promise<Perfil> {
 export type ItemMenu = {
   href: string;
   etiqueta: string;
+  corta: string; // etiqueta corta para la barra inferior del celular
+  icono: string; // nombre en components/iconos.tsx → ICONOS
   roles: RolUsuario[];
   activo: boolean;
 };
@@ -68,34 +87,51 @@ export type ItemMenu = {
 const TODOS: RolUsuario[] = ["admin", "tesoreria", "porteria", "residente"];
 
 export const MENU: ItemMenu[] = [
-  { href: "/inicio", etiqueta: "Inicio", roles: TODOS, activo: true },
+  {
+    href: "/inicio",
+    etiqueta: "Inicio",
+    corta: "Inicio",
+    icono: "casa",
+    roles: TODOS,
+    activo: true,
+  },
   {
     href: "/lecturas",
     etiqueta: "Lecturas de agua",
+    corta: "Lecturas",
+    icono: "gota",
     roles: ["porteria", "tesoreria", "admin"],
     activo: true,
   },
   {
     href: "/periodos",
     etiqueta: "Periodos",
+    corta: "Periodos",
+    icono: "calendario",
     roles: ["tesoreria", "admin", "residente"],
     activo: true,
   },
   {
     href: "/estado-cuenta",
     etiqueta: "Estado de cuenta",
+    corta: "Cuenta",
+    icono: "cuenta",
     roles: ["residente", "tesoreria", "admin"],
     activo: true,
   },
   {
     href: "/egresos",
     etiqueta: "Egresos",
+    corta: "Egresos",
+    icono: "recibo",
     roles: ["tesoreria", "admin"],
     activo: false,
   },
   {
     href: "/usuarios",
     etiqueta: "Usuarios y roles",
+    corta: "Usuarios",
+    icono: "usuarios",
     roles: ["admin"],
     activo: false,
   },

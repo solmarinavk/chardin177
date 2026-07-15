@@ -3,17 +3,26 @@
 Con esta fase la operación mensual básica **ya no necesita el Excel**: lecturas →
 recibos → cálculo automático → emisión → pagos → semáforo de quién pagó.
 
-## ⚠️ Primero: aplica la migración 0002 en tu Supabase
+## 🚨 URGENTE: pon tu base al día (arregla el error al crear periodos)
 
-Encontré un **bug en el `schema.sql`** que ya aplicaste: el trigger que marca una
-cuota como pagada fallaba (asignaba texto a una columna de tipo enum). Sin esto,
-**registrar cualquier pago da error**. Arréglalo en 1 minuto:
+El error **"stack depth limit exceeded"** que sale en la web al crear un periodo
+es un bug del `schema.sql` original (recursión infinita en los permisos por rol).
+Se arregla pegando DOS scripts en Supabase → **SQL Editor** → **New query**.
+**No necesitas redeploy**: el arreglo vive en la base de datos y aplica al
+instante sobre la web ya publicada.
 
-1. Supabase → **SQL Editor** → **New query**.
-2. Pega el contenido de `supabase/migrations/0002_fix_estado_cuota_cast.sql` y pulsa **Run**.
-3. Debe decir "Success". Listo.
+1. Pega TODO el contenido de
+   `supabase/migrations/0003_fix_rls_recursion_y_triggers.sql` → **Run**.
+   Arregla: crear periodos, guardar lecturas y recibos (auditoría) y registrar
+   pagos. _Incluye también el fix de la migración 0002, así que no importa si
+   esa no la corriste._
+2. Pega TODO el contenido de
+   `supabase/migrations/0004_storage_policies.sql` → **Run**.
+   Habilita subir y ver las fotos (medidores, recibos, comprobantes).
 
-(Los proyectos nuevos ya no tienen el bug: `schema.sql` quedó corregido.)
+Después de esto, vuelve a la web, recarga y crea el periodo: debe funcionar.
+
+(Los proyectos nuevos no necesitan nada de esto: `schema.sql` quedó corregido.)
 
 ## Lo que ya está en el repo
 
@@ -52,10 +61,30 @@ Los tests corren contra **Postgres de verdad** (embebido, sin depender de intern
    el **semáforo** cambia a 🟡/🟢 y el **estado de cuenta** refleja el abono.
 7. Intenta editar una lectura del periodo emitido: la base lo **bloquea** (inmutable).
 
+## La experiencia (rediseño UX)
+
+La app está pensada para que **nadie tenga que preguntarse qué toca hacer**:
+
+- **El GPS del mes**: en Inicio y en cada periodo hay una guía de 6 pasos
+  (lecturas → recibos → calcular → emitir → cobranza → cerrar) que marca lo
+  hecho en verde y lo que toca con un botón grande "Te toca ahora".
+- **Barra inferior tipo app** en el celular (Inicio · Lecturas · Periodos ·
+  Cuenta), pensada para el portero y los vecinos.
+- **Lecturas**: cada departamento es una tarjeta que se pone verde al
+  completarse, muestra los m³ consumidos al instante, alerta si el consumo es
+  raro, y el botón Guardar flota siempre a la vista con el avance (7/10). El
+  campo de foto abre directo la cámara del celular.
+- **Cobranza**: barra de recaudación (S/ X de S/ Y), semáforo con montos por
+  departamento y registro de pago con el saldo exacto precargado.
+- **Cada rol ve solo lo suyo**: el inicio de portería es un solo botón gigante;
+  el de tesorería es el GPS; el del residente muestra su cuota y el semáforo.
+
 ## Notas de diseño
 
 - Todo el dinero se muestra en `S/` pero se guarda en **céntimos enteros**.
 - Las escrituras respetan **RLS**: portería solo lecturas; tesorería/admin recibos,
-  pagos y emisión; residentes solo lectura.
+  pagos y emisión; residentes solo lectura. Ahora hay **tests por rol**
+  (`tests/rls.test.ts`) que simulan usuarios reales y cubren la regresión del
+  bug de producción.
 - Las fotos (medidor, recibo, comprobante) son **opcionales** y van a los buckets
-  privados de Supabase.
+  privados de Supabase (políticas en la migración 0004).

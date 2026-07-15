@@ -2,6 +2,8 @@
 
 import { useFormState } from "react-dom";
 import { BotonEnviar } from "@/components/BotonEnviar";
+import { CampoFoto } from "@/components/forms/CampoFoto";
+import { IconoCheck } from "@/components/iconos";
 import { ESTADO_INICIAL, type EstadoForm } from "@/lib/formularios";
 import type { TipoRecibo } from "@/lib/database.types";
 
@@ -19,15 +21,34 @@ export function FormRecibo({
   montoActualCent: number | null;
 }) {
   const [estado, formAction] = useFormState(accion, ESTADO_INICIAL);
-  const etiqueta = tipo === "agua" ? "Recibo de agua (Sedapal)" : "Recibo de luz común";
+  const etiqueta = tipo === "agua" ? "Agua (Sedapal)" : "Luz común";
+  const guardado = montoActualCent !== null;
 
   return (
-    <form action={formAction} className="flex flex-col gap-3">
+    <form
+      action={formAction}
+      className={`rounded-2xl border p-4 transition ${
+        guardado ? "border-emerald-300 bg-emerald-50/40" : "border-slate-200"
+      }`}
+    >
       <input type="hidden" name="periodo_id" value={periodoId} />
       <input type="hidden" name="tipo" value={tipo} />
-      <div>
+
+      <div className="flex items-center justify-between gap-2">
+        <p className="font-bold text-slate-900">
+          {tipo === "agua" ? "💧" : "💡"} {etiqueta}
+        </p>
+        {guardado && (
+          <span className="chip bg-emerald-100 text-emerald-800">
+            <IconoCheck className="h-3.5 w-3.5" />
+            Guardado
+          </span>
+        )}
+      </div>
+
+      <div className="mt-3">
         <label htmlFor={`monto_${tipo}`} className="etiqueta">
-          {etiqueta} — monto en soles
+          Monto del recibo (S/)
         </label>
         <input
           id={`monto_${tipo}`}
@@ -37,33 +58,34 @@ export function FormRecibo({
           min="0"
           inputMode="decimal"
           required
-          defaultValue={
-            montoActualCent !== null ? (montoActualCent / 100).toFixed(2) : ""
-          }
-          className="campo"
+          defaultValue={guardado ? (montoActualCent / 100).toFixed(2) : ""}
+          className="campo num"
           placeholder="Ej. 488.70"
         />
       </div>
-      <div>
-        <label htmlFor={`foto_${tipo}`} className="etiqueta">
-          Foto del recibo (opcional)
-        </label>
-        <input
+
+      <div className="mt-3">
+        <CampoFoto
           id={`foto_${tipo}`}
           name="foto"
-          type="file"
-          accept="image/*"
-          className="campo file:mr-3 file:rounded-lg file:border-0 file:bg-slate-200 file:px-3 file:py-2"
+          etiqueta="Foto del recibo (opcional)"
         />
       </div>
-      <BotonEnviar className="btn-secondary w-full">Guardar recibo de {tipo}</BotonEnviar>
+
+      <BotonEnviar className="btn-secondary mt-3 w-full">
+        {guardado ? "Actualizar monto" : `Guardar recibo de ${tipo}`}
+      </BotonEnviar>
+
       {estado.error && (
-        <p role="alert" className="text-sm font-medium text-red-700">
+        <p role="alert" className="mt-2 text-sm font-medium text-red-700">
           {estado.error}
         </p>
       )}
       {estado.ok && estado.mensaje && (
-        <p className="text-sm font-medium text-green-700">{estado.mensaje}</p>
+        <p className="mt-2 flex items-center gap-1.5 text-sm font-medium text-emerald-800">
+          <IconoCheck className="h-4 w-4" />
+          {estado.mensaje}
+        </p>
       )}
     </form>
   );

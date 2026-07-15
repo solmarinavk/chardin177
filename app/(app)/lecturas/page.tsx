@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { requireRol } from "@/lib/roles";
 import {
@@ -11,6 +12,8 @@ import { etiquetaPeriodo } from "@/lib/fechas";
 import { FormLecturas, type FilaLectura } from "@/components/forms/lecturas";
 import { guardarLecturas } from "./acciones";
 
+export const metadata: Metadata = { title: "Lecturas de agua" };
+
 export default async function LecturasPage() {
   await requireRol(["porteria", "tesoreria", "admin"]);
 
@@ -19,15 +22,24 @@ export default async function LecturasPage() {
   if (!borrador) {
     return (
       <main className="flex flex-col gap-4">
-        <h1 className="text-2xl font-bold text-slate-900">Lecturas de agua</h1>
-        <p className="text-slate-600">
-          No hay un periodo en borrador. Pídele a tesorería o administración que
-          cree el periodo del mes en la sección{" "}
-          <Link href="/periodos" className="font-semibold text-blue-700 underline">
-            Periodos
-          </Link>
-          .
-        </p>
+        <h1 className="text-2xl font-black tracking-tight text-slate-900">
+          Lecturas de agua
+        </h1>
+        <section className="card animar-aparecer p-6 text-center">
+          <p className="text-4xl" aria-hidden>
+            💧
+          </p>
+          <h2 className="mt-2 text-lg font-bold text-slate-900">
+            No hay un mes abierto
+          </h2>
+          <p className="mt-1 text-slate-600">
+            Cuando tesorería o administración creen el periodo del mes en{" "}
+            <Link href="/periodos" className="font-semibold text-slate-900 underline">
+              Periodos
+            </Link>
+            , aquí aparecerán las 10 casillas para las lecturas.
+          </p>
+        </section>
       </main>
     );
   }
@@ -52,15 +64,14 @@ export default async function LecturasPage() {
   });
 
   return (
-    <main className="flex flex-col gap-5">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">Lecturas de agua</h1>
+    <main className="flex flex-col gap-4">
+      <div className="animar-aparecer">
+        <h1 className="text-2xl font-black tracking-tight text-slate-900">
+          Lecturas de agua
+        </h1>
         <p className="mt-1 text-slate-600">
-          Periodo{" "}
-          <span className="font-semibold">
-            {etiquetaPeriodo(borrador.anio, borrador.mes)}
-          </span>
-          . Ingresa la lectura actual de cada medidor.
+          {etiquetaPeriodo(borrador.anio, borrador.mes)} · Copia el número que
+          marca cada medidor. La lectura anterior ya está puesta.
         </p>
       </div>
 

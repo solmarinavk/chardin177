@@ -17,6 +17,19 @@ export async function listPeriodos(): Promise<Periodo[]> {
   return data ?? [];
 }
 
+// El periodo más reciente por año/mes (en cualquier estado), o null.
+export async function getPeriodoActual(): Promise<Periodo | null> {
+  const s = createClient();
+  const { data } = await s
+    .from("periodos")
+    .select("*")
+    .order("anio", { ascending: false })
+    .order("mes", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return data ?? null;
+}
+
 export async function getPeriodo(id: number): Promise<Periodo | null> {
   const s = createClient();
   const { data } = await s.from("periodos").select("*").eq("id", id).maybeSingle();
@@ -143,6 +156,46 @@ export async function getPromediosConsumo(
   }
   for (const [dpto, a] of acc) mapa.set(dpto, a.n ? a.sum / a.n : 0);
   return mapa;
+}
+
+// Resumen completo de un periodo para el flujo del mes y los dashboards:
+// avance de lecturas/recibos/cuotas y recaudación.
+export type ResumenPeriodo = {
+  periodo: Periodo;
+  lecturas: number;
+  reciboAgua: boolean;
+  reciboLuz: boolean;
+  recibos: { agua: ReciboServicio | null; luz: ReciboServicio | null };
+  cuotas: Cuota[];
+  pagadoPorCuota: Map<number, number>;
+  cuotasPagadas: number;
+  esperadoCent: number;
+  recaudadoCent: number;
+};
+
+export async function getResumenPeriodo(periodo: Periodo): Promise<ResumenPeriodo> {
+  const [lecturas, recibos, cuotas, pagadoPorCuota] = await Promise.all([
+    getLecturas(periodo.id),
+    getRecibos(periodo.id),
+    getCuotas(periodo.id),
+    getPagadoPorCuota(periodo.id),
+  ]);
+
+  let recaudadoCent = 0;
+  for (const monto of pagadoPorCuota.values()) recaudadoCent += monto;
+
+  return {
+    periodo,
+    lecturas: lecturas.length,
+    reciboAgua: recibos.agua !== null,
+    reciboLuz: recibos.luz !== null,
+    recibos,
+    cuotas,
+    pagadoPorCuota,
+    cuotasPagadas: cuotas.filter((c) => c.estado === "pagado").length,
+    esperadoCent: cuotas.reduce((acc, c) => acc + c.total_cent, 0),
+    recaudadoCent,
+  };
 }
 
 export type EstadoCuentaDpto = {

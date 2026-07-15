@@ -1,10 +1,15 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { getPerfil } from "@/lib/roles";
 import { listPeriodos, getBorrador } from "@/lib/periodos";
 import { etiquetaPeriodo, hoyLima } from "@/lib/fechas";
+import { formatoPEN } from "@/lib/centimos";
 import { EstadoPeriodoBadge } from "@/components/estados";
 import { FormCrearPeriodo } from "@/components/forms/periodo";
+import { IconoFlecha, IconoCalendario } from "@/components/iconos";
 import { crearPeriodo } from "./acciones";
+
+export const metadata: Metadata = { title: "Periodos" };
 
 export default async function PeriodosPage() {
   const perfil = await getPerfil();
@@ -15,27 +20,38 @@ export default async function PeriodosPage() {
   const [anioHoy, mesHoy] = hoyLima().split("-").map((x) => Number(x));
 
   return (
-    <main className="flex flex-col gap-6">
-      <h1 className="text-2xl font-bold text-slate-900">Periodos mensuales</h1>
+    <main className="flex flex-col gap-5">
+      <h1 className="animar-aparecer text-2xl font-black tracking-tight text-slate-900">
+        Periodos mensuales
+      </h1>
 
       {puedeGestionar && (
-        <section className="rounded-2xl border border-slate-200 bg-white p-5">
+        <section className="card animar-aparecer p-5">
           {borrador ? (
-            <p className="text-slate-700">
-              Ya hay un periodo en borrador:{" "}
-              <Link
-                href={`/periodos/${borrador.id}`}
-                className="font-semibold text-blue-700 underline"
-              >
-                {etiquetaPeriodo(borrador.anio, borrador.mes)}
-              </Link>
-              . Emítelo o ciérralo antes de crear otro.
-            </p>
+            <div className="flex items-start gap-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-600">
+                <IconoCalendario className="h-5 w-5" />
+              </span>
+              <div>
+                <p className="text-slate-700">
+                  Ya hay un mes en preparación:{" "}
+                  <span className="font-bold">
+                    {etiquetaPeriodo(borrador.anio, borrador.mes)}
+                  </span>
+                  . Solo puede haber uno a la vez.
+                </p>
+                <Link
+                  href={`/periodos/${borrador.id}`}
+                  className="btn-primary mt-3 min-h-[44px] px-4 py-2.5 text-sm"
+                >
+                  Continuar con ese mes
+                  <IconoFlecha className="h-4 w-4" />
+                </Link>
+              </div>
+            </div>
           ) : (
             <>
-              <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
-                Crear nuevo periodo
-              </h2>
+              <h2 className="titulo-seccion mb-3">Abrir un nuevo mes</h2>
               <FormCrearPeriodo
                 accion={crearPeriodo}
                 defaultAnio={anioHoy ?? 2026}
@@ -48,18 +64,31 @@ export default async function PeriodosPage() {
 
       <section className="flex flex-col gap-2">
         {periodos.length === 0 && (
-          <p className="text-slate-500">Aún no hay periodos.</p>
+          <p className="animar-aparecer text-center text-slate-500">
+            Aún no hay periodos creados.
+          </p>
         )}
-        {periodos.map((p) => (
+        {periodos.map((p, i) => (
           <Link
             key={p.id}
             href={`/periodos/${p.id}`}
-            className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 hover:bg-slate-50"
+            className="card animar-aparecer flex items-center justify-between gap-3 p-4 transition hover:-translate-y-0.5 hover:shadow-md"
+            style={{ animationDelay: `${Math.min(i * 40, 240)}ms` }}
           >
-            <span className="text-lg font-semibold text-slate-900">
-              {etiquetaPeriodo(p.anio, p.mes)}
-            </span>
-            <EstadoPeriodoBadge estado={p.estado} />
+            <div className="min-w-0">
+              <p className="truncate text-lg font-bold text-slate-900">
+                {etiquetaPeriodo(p.anio, p.mes)}
+              </p>
+              {p.estado === "cerrado" && p.saldo_final_cent !== null && (
+                <p className="num text-sm text-slate-500">
+                  Saldo final: {formatoPEN(p.saldo_final_cent)}
+                </p>
+              )}
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              <EstadoPeriodoBadge estado={p.estado} />
+              <IconoFlecha className="h-4 w-4 text-slate-400" />
+            </div>
           </Link>
         ))}
       </section>

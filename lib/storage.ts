@@ -19,8 +19,10 @@ export async function subirFoto(
 ): Promise<{ ruta: string } | { error: string }> {
   const s = createClient();
   const ruta = `${prefijo}-${crypto.randomUUID()}.${extensionDe(archivo)}`;
+  // upsert:false — la ruta es única (UUID) y la política de storage solo
+  // permite INSERT, no UPDATE.
   const { data, error } = await s.storage.from(bucket).upload(ruta, archivo, {
-    upsert: true,
+    upsert: false,
     contentType: archivo.type || undefined,
   });
   if (error) return { error: error.message };

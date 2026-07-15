@@ -2,6 +2,8 @@
 
 import { useFormState } from "react-dom";
 import { BotonEnviar } from "@/components/BotonEnviar";
+import { CampoFoto } from "@/components/forms/CampoFoto";
+import { IconoCheck } from "@/components/iconos";
 import { ESTADO_INICIAL, type EstadoForm } from "@/lib/formularios";
 
 type Accion = (prev: EstadoForm, fd: FormData) => Promise<EstadoForm>;
@@ -29,10 +31,13 @@ export function FormPago({
 }) {
   const [estado, formAction] = useFormState(accion, ESTADO_INICIAL);
   return (
-    <form action={formAction} className="mt-2 flex flex-col gap-2 border-t border-slate-100 pt-2">
+    <form
+      action={formAction}
+      className="mt-3 flex flex-col gap-3 rounded-xl bg-slate-50 p-3"
+    >
       <input type="hidden" name="periodo_id" value={periodoId} />
       <input type="hidden" name="cuota_id" value={cuotaId} />
-      <div className="flex gap-2">
+      <div className="flex gap-3">
         <div className="flex-1">
           <label className="etiqueta" htmlFor={`monto_${cuotaId}`}>
             Monto (S/)
@@ -43,9 +48,10 @@ export function FormPago({
             type="number"
             step="0.01"
             min="0.01"
+            inputMode="decimal"
             required
             defaultValue={(Math.max(saldoPendienteCent, 0) / 100).toFixed(2)}
-            className="campo"
+            className="campo num"
           />
         </div>
         <div className="flex-1">
@@ -64,9 +70,14 @@ export function FormPago({
       </div>
       <div>
         <label className="etiqueta" htmlFor={`medio_${cuotaId}`}>
-          Medio
+          Medio de pago
         </label>
-        <select id={`medio_${cuotaId}`} name="medio" defaultValue="transferencia" className="campo">
+        <select
+          id={`medio_${cuotaId}`}
+          name="medio"
+          defaultValue="transferencia"
+          className="campo"
+        >
           {MEDIOS.map((m) => (
             <option key={m.valor} value={m.valor}>
               {m.texto}
@@ -74,18 +85,11 @@ export function FormPago({
           ))}
         </select>
       </div>
-      <div>
-        <label className="etiqueta" htmlFor={`comprobante_${cuotaId}`}>
-          Comprobante (opcional)
-        </label>
-        <input
-          id={`comprobante_${cuotaId}`}
-          name="comprobante"
-          type="file"
-          accept="image/*"
-          className="w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-slate-200 file:px-3 file:py-2"
-        />
-      </div>
+      <CampoFoto
+        id={`comprobante_${cuotaId}`}
+        name="comprobante"
+        etiqueta="Comprobante: captura del yape o voucher (opcional)"
+      />
       <BotonEnviar className="btn-primary w-full" textoEnviando="Registrando…">
         Registrar pago
       </BotonEnviar>
@@ -95,7 +99,10 @@ export function FormPago({
         </p>
       )}
       {estado.ok && estado.mensaje && (
-        <p className="text-sm font-medium text-green-700">{estado.mensaje}</p>
+        <p className="flex items-center gap-1.5 text-sm font-medium text-emerald-800">
+          <IconoCheck className="h-4 w-4" />
+          {estado.mensaje}
+        </p>
       )}
     </form>
   );

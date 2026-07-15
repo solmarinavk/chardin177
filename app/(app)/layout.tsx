@@ -1,10 +1,13 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { ETIQUETA_ROL, menuPara } from "@/lib/roles";
+import { menuPara, nombreConRol } from "@/lib/roles";
+import { NavSuperior, NavInferior, type NavItem } from "@/components/Nav";
+import { IconoSalir } from "@/components/iconos";
 
-// Layout de la zona autenticada. Exige sesión + perfil activo. Muestra el
-// nombre, el rol y el menú que corresponde a ese rol.
+// Layout de la zona autenticada. Exige sesión + perfil activo. Cabecera fija
+// con marca y rol; pestañas arriba en pantalla grande y barra inferior tipo
+// app en el celular.
 export default async function AppLayout({
   children,
 }: {
@@ -24,59 +27,58 @@ export default async function AppLayout({
 
   if (!perfil || !perfil.activo) redirect("/sin-acceso");
 
-  const items = menuPara(perfil.rol);
+  const itemsSuperior: NavItem[] = menuPara(perfil.rol).map((m) => ({
+    href: m.href,
+    etiqueta: m.etiqueta,
+    icono: m.icono,
+    activo: m.activo,
+  }));
+  const itemsInferior: NavItem[] = menuPara(perfil.rol).map((m) => ({
+    href: m.href,
+    etiqueta: m.corta,
+    icono: m.icono,
+    activo: m.activo,
+  }));
 
   return (
     <div className="min-h-dvh">
-      <header className="border-b border-slate-200 bg-white">
+      <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/90 backdrop-blur">
         <div className="mx-auto flex max-w-3xl items-center justify-between gap-3 px-4 py-3">
-          <div className="min-w-0">
-            <p className="truncate text-lg font-black leading-tight tracking-tight text-slate-900">
-              Chardin 177
-            </p>
-            <p className="truncate text-xs text-slate-500">
-              {perfil.nombre} · {ETIQUETA_ROL[perfil.rol]}
-            </p>
-          </div>
+          <Link href="/inicio" className="flex min-w-0 items-center gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-900 text-xs font-black tracking-tight text-white">
+              177
+            </span>
+            <span className="min-w-0">
+              <span className="block truncate text-base font-black leading-tight tracking-tight text-slate-900">
+                Chardin 177
+              </span>
+              <span className="block truncate text-xs text-slate-500">
+                {nombreConRol(perfil)}
+              </span>
+            </span>
+          </Link>
           <form action="/auth/signout" method="post">
             <button
               type="submit"
               className="btn-secondary min-h-[40px] px-3 py-2 text-sm"
             >
+              <IconoSalir className="h-4 w-4" />
               Salir
             </button>
           </form>
         </div>
-
-        <nav className="mx-auto max-w-3xl overflow-x-auto px-2 pb-2">
-          <ul className="flex gap-1 whitespace-nowrap text-sm">
-            {items.map((item) => (
-              <li key={item.href}>
-                {item.activo ? (
-                  <Link
-                    href={item.href}
-                    className="inline-block rounded-lg px-3 py-2 font-medium text-slate-700 hover:bg-slate-100"
-                  >
-                    {item.etiqueta}
-                  </Link>
-                ) : (
-                  <span
-                    className="inline-block rounded-lg px-3 py-2 text-slate-400"
-                    title="Próximamente"
-                  >
-                    {item.etiqueta}
-                    <span className="ml-1 text-[10px] uppercase tracking-wide">
-                      pronto
-                    </span>
-                  </span>
-                )}
-              </li>
-            ))}
-          </ul>
-        </nav>
+        <NavSuperior items={itemsSuperior} />
+        <div
+          aria-hidden
+          className="h-0.5 bg-gradient-to-r from-sky-500 via-emerald-500 to-amber-400"
+        />
       </header>
 
-      <div className="mx-auto max-w-3xl px-4 py-6">{children}</div>
+      <div className="mx-auto w-full max-w-3xl px-4 pb-28 pt-6 sm:pb-12">
+        {children}
+      </div>
+
+      <NavInferior items={itemsInferior} />
     </div>
   );
 }
