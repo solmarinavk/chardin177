@@ -8,16 +8,25 @@ export const metadata: Metadata = {
   },
   description:
     "Plataforma de administración, tesorería y transparencia del edificio Chardin 177 (Barranco, Lima).",
+  manifest: "/manifest.webmanifest",
   icons: {
-    // Favicon como emoji (SVG inline, sin archivos binarios).
-    icon: "data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏢</text></svg>",
+    icon: "/icons/icon-192.png",
+    apple: "/icons/apple-touch-icon.png",
+  },
+  // Instalada en iPhone: pantalla completa con el nombre correcto.
+  appleWebApp: {
+    capable: true,
+    title: "Chardin 177",
+    statusBarStyle: "default",
   },
 };
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: "#0f172a",
+  themeColor: "#ffffff",
+  // Necesario para respetar las zonas seguras del iPhone (notch/barra inferior).
+  viewportFit: "cover",
 };
 
 export default function RootLayout({
