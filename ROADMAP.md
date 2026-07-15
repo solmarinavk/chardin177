@@ -46,13 +46,14 @@ Cada fase es una serie de sesiones de Claude Code. Marca los checkboxes al compl
 - [ ] 3.4 Recibo por dpto: vista imprimible/compartible con desglose completo, botón "compartir por WhatsApp" (link wa.me con texto del resumen).
 - [ ] 3.5 Notificaciones por Resend: al emitir (cuota del mes a cada residente) y recordatorio a pendientes el día 25.
 
-## FASE 4 · Historia y blindaje (2 sesiones)
+## FASE 4 · Historia y blindaje (2 a 3 sesiones)
 
-- [ ] 4.1 Script de migración `scripts/migrar_excel.ts`: importar del Excel auditado los periodos históricos como periodos `cerrados` (cuotas, pagos, egresos, saldos). Validar que el saldo final migrado coincide con el real (~S/ 9,746 a junio 2026).
+- [ ] 4.1 Migración histórica (`scripts/migrar_excel.ts`): importar el Excel `Chardin_177_Historico.xlsx` (formato tabla larga, ya auditado y validado), leído vía **service role key solo en local**. Cargar la hoja `Cuotas` (una fila por depto por mes, feb-2024 a jul-2026) como periodos en estado `cerrado` con sus cuotas por depto, y la hoja `Caja` como los saldos mensuales arrastrados. **Se carga tal cual, sin recalcular con el motor** (los datos ya están validados). El script valida que los saldos cuadran y que el **saldo final del último mes histórico (jul-2026) empalma sin saltos** con el saldo inicial del primer periodo operativo de la plataforma; aborta si no cuadra. Guardar además el Excel histórico como **documento descargable** en el módulo Documentos.
 - [ ] 4.2 Bitácora visible: página de auditoría (admin) con filtros por tabla, usuario y fecha.
 - [ ] 4.3 Backup: GitHub Action semanal que exporta las tablas a CSV en el repo (rama `backups`).
 - [ ] 4.4 Manual de usuario embebido: página /ayuda con el flujo mensual paso a paso con capturas.
 - [ ] 4.5 Traspaso de cargo: pantalla de admin para reasignar roles con confirmación y registro en bitácora.
+- [ ] 4.6 Exportador a Excel: botón **"Descargar Excel"** en cada módulo (pagos, egresos, estado de cuenta, caja) que exporta lo que se ve, más una pantalla de **"Exportación total"** con filtros por periodo, rango de meses, dpto y tipo de dato, generando un `.xlsx` con **una hoja por tipo de dato y montos en soles**. Generación **del lado servidor** con `exceljs` o `SheetJS`. Permisos: **admin y tesorería exportan todo; residente solo su propio estado de cuenta** (respetando RLS).
 
 ## Backlog (ideas futuras, no bloquean nada)
 

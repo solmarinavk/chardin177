@@ -69,3 +69,23 @@ CLAUDE.md               este archivo
 - No crear features fuera del roadmap sin registrarlas primero en `ROADMAP.md`.
 - No "arreglar" datos históricos con UPDATE directo: siempre vía ajustes visibles.
 - No usar floats para dinero (repetido a propósito).
+
+## Fase 4 · Migración histórica y exportación a Excel (reglas para cuando se construyan)
+
+Estas dos features están planificadas en `ROADMAP.md` (tareas 4.1 y 4.6). No se construyen hasta la Fase 4, pero estas reglas aplican desde el diseño.
+
+### Migración histórica del Excel (tarea 4.1)
+
+- El archivo fuente es `Chardin_177_Historico.xlsx` (formato tabla larga, ya auditado y validado): hoja `Cuotas` (una fila por depto por mes, feb-2024 a jul-2026), hoja `Caja` (saldos mensuales), `Resumen mensual` y `Departamentos`. El usuario lo entrega al llegar a la Fase 4.
+- Los datos históricos **se cargan tal cual, SIN recalcular con el motor**. Es la única excepción documentada a "el motor calcula": los periodos migrados son un volcado fiel del Excel auditado. `generar_cuotas` NO se ejecuta sobre ellos.
+- Cada mes histórico entra como un periodo en estado `cerrado`, con sus cuotas por depto; la hoja `Caja` fija los saldos mensuales arrastrados. Como todo periodo cerrado, son **inmutables** (no se editan; correcciones futuras van como ajustes del periodo siguiente).
+- **Empalme sin saltos:** el saldo final del último mes histórico (jul-2026) de la hoja `Caja` debe ser exactamente el saldo inicial del primer periodo operativo. El script valida que los saldos cuadran y **aborta si no cuadra** (no carga nada a medias).
+- `scripts/migrar_excel.ts` lee el `.xlsx` con la **service role key SOLO en local** (nunca en el cliente).
+- El Excel histórico se guarda además como **documento descargable** en el módulo Documentos.
+
+### Exportador a Excel (tarea 4.6)
+
+- Cada módulo (pagos, egresos, estado de cuenta, caja) lleva un botón **"Descargar Excel"** que exporta lo que el usuario ve; además una pantalla de **"Exportación total"** con filtros (periodo, rango de meses, dpto, tipo de dato) que genera un `.xlsx` con **una hoja por tipo de dato**.
+- La generación del `.xlsx` es **del lado servidor** con `exceljs` o `SheetJS`. Aclaración a "no librerías de UI pesadas": esa regla es para UI; las librerías de datos del lado servidor (exceljs/SheetJS) **sí están permitidas**.
+- En el Excel los montos van **en soles** (formateados desde céntimos con los helpers de `lib/centimos.ts`), aunque internamente todo siga en céntimos enteros.
+- Permisos: **admin y tesorería exportan todo; el residente solo su propio estado de cuenta.** La exportación respeta RLS igual que el resto de la app (nunca se salta permisos con la service role).
