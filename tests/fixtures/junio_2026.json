@@ -1,0 +1,102 @@
+{
+  "descripcion": "Datos reales del Excel Chardin 177, junio 2026. El motor debe reproducir estos totales con tolerancia de 1 centimo.",
+  "recibo_agua_cent": 48870,
+  "recibo_luz_cent": 54450,
+  "vigilancia_total_cent": 200000,
+  "manto_total_cent": 137610,
+  "materiales_dpto_cent": 2000,
+  "agua_comun_dpto_cent": 1500,
+  "extra_dpto_cent": 4100,
+  "deptos": [
+    {
+      "dpto": 101,
+      "lectura_anterior": 121,
+      "lectura_actual": 125,
+      "esperado": {
+        "agua_consumo_cent": 1168,
+        "total_cent": 47974
+      }
+    },
+    {
+      "dpto": 102,
+      "lectura_anterior": 407,
+      "lectura_actual": 423,
+      "esperado": {
+        "agua_consumo_cent": 4672,
+        "total_cent": 51478
+      }
+    },
+    {
+      "dpto": 201,
+      "lectura_anterior": 510,
+      "lectura_actual": 523,
+      "esperado": {
+        "agua_consumo_cent": 3796,
+        "total_cent": 50602
+      }
+    },
+    {
+      "dpto": 202,
+      "lectura_anterior": 744,
+      "lectura_actual": 760,
+      "esperado": {
+        "agua_consumo_cent": 4672,
+        "total_cent": 51478
+      }
+    },
+    {
+      "dpto": 301,
+      "lectura_anterior": 277,
+      "lectura_actual": 286,
+      "esperado": {
+        "agua_consumo_cent": 2628,
+        "total_cent": 49434
+      }
+    },
+    {
+      "dpto": 302,
+      "lectura_anterior": 200,
+      "lectura_actual": 206,
+      "esperado": {
+        "agua_consumo_cent": 1752,
+        "total_cent": 48558
+      }
+    },
+    {
+      "dpto": 401,
+      "lectura_anterior": 104,
+      "lectura_actual": 108,
+      "esperado": {
+        "agua_consumo_cent": 1168,
+        "total_cent": 47974
+      }
+    },
+    {
+      "dpto": 402,
+      "lectura_anterior": 449,
+      "lectura_actual": 464,
+      "esperado": {
+        "agua_consumo_cent": 4380,
+        "total_cent": 51186
+      }
+    },
+    {
+      "dpto": 501,
+      "lectura_anterior": 947,
+      "lectura_actual": 967,
+      "esperado": {
+        "agua_consumo_cent": 5840,
+        "total_cent": 52646
+      }
+    },
+    {
+      "dpto": 502,
+      "lectura_anterior": 532,
+      "lectura_actual": 545,
+      "esperado": {
+        "agua_consumo_cent": 3796,
+        "total_cent": 50602
+      }
+    }
+  ]
+}
