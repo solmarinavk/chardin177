@@ -188,6 +188,33 @@ export async function registrarPago(
   return { ok: true, error: null, mensaje: "Pago registrado." };
 }
 
+// 2.3 · Cerrar el mes: cuadra la caja (pagos no contabilizados + egresos
+// pagados), fija el saldo final y abre el mes siguiente con el saldo
+// arrastrado. Las cuotas impagas pasan como deuda a la cuenta corriente.
+export async function cerrarPeriodo(
+  _prev: EstadoForm,
+  formData: FormData,
+): Promise<EstadoForm> {
+  await requireRol(TESORERIA);
+  const periodoId = enteroDesdeInput(formData.get("periodo_id"));
+  if (periodoId === null) return { ok: false, error: "Periodo inválido." };
+
+  const s = createClient();
+  const { error } = await s.rpc("cerrar_periodo", { p_periodo: periodoId });
+  if (error) return { ok: false, error: mensajeError(error) };
+
+  revalidatePath("/periodos");
+  revalidatePath(`/periodos/${periodoId}`);
+  revalidatePath("/caja");
+  revalidatePath("/inicio");
+  return {
+    ok: true,
+    error: null,
+    mensaje:
+      "Mes cerrado. El saldo pasó al mes siguiente, que ya quedó creado en borrador.",
+  };
+}
+
 // 1.7 · Anular un pago mal registrado (error de digitación). El trigger de la
 // base recalcula el estado de la cuota y la anulación queda en audit_log.
 export async function anularPago(

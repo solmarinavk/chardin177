@@ -1,0 +1,236 @@
+import { createClient } from "@/lib/supabase/server";
+import type { Tables } from "@/lib/database.types";
+import type { Periodo } from "@/lib/periodos";
+
+export type Egreso = Tables<"egresos">;
+export type CategoriaEgreso = Tables<"categorias_egreso">;
+
+export async function getCategorias(): Promise<CategoriaEgreso[]> {
+  const s = createClient();
+  const { data } = await s.from("categorias_egreso").select("*").order("id");
+  return data ?? [];
+}
+
+// El periodo "abierto" donde se registran egresos y se cobra: el más antiguo
+// no cerrado. (Puede convivir un emitido en cobranza con un borrador nuevo;
+// la caja viva es la del más antiguo.)
+export async function getPeriodoAbierto(): Promise<Periodo | null> {
+  const s = createClient();
+  const { data } = await s
+    .from("periodos")
+    .select("*")
+    .neq("estado", "cerrado")
+    .order("anio")
+    .order("mes")
+    .limit(1)
+    .maybeSingle();
+  return data ?? null;
+}
+
+export type FiltroEgresos = {
+  periodoId?: number | null; // null/undefined = todos
+  categoriaId?: number | null;
+};
+
+export async function getEgresos(filtro: FiltroEgresos = {}): Promise<Egreso[]> {
+  const s = createClient();
+  let q = s
+    .from("egresos")
+    .select("*")
+    .order("fecha", { ascending: false })
+    .order("id", { ascending: false });
+  if (filtro.periodoId != null) q = q.eq("periodo_id", filtro.periodoId);
+  if (filtro.categoriaId != null) q = q.eq("categoria_id", filtro.categoriaId);
+  const { data } = await q;
+  return data ?? [];
+}
+
+// Libro de caja de un periodo.
+//  - Abierto (borrador/emitido): ingresos = pagos aún no contabilizados (los
+//    recogerá el cierre de este mes, incluidos atrasos de meses cerrados).
+//  - Cerrado: ingresos = pagos contabilizados en su cierre.
+export type LibroCaja = {
+  periodo: Periodo;
+  saldoInicialCent: number;
+  saldoInicialPendiente: boolean; // true si aún no está fijado (1er mes, hasta la migración histórica)
+  ingresosCent: number;
+  egresosPagadosCent: number;
+  porPagarCent: number; // egresos registrados no pagados (no entran a caja)
+  saldoActualCent: number; // proyectado si abierto; el final real si cerrado
+};
+
+export async function getLibroCaja(periodo: Periodo): Promise<LibroCaja> {
+  const s = createClient();
+
+  let ingresos = 0;
+  if (periodo.estado === "cerrado") {
+    const { data } = await s
+      .from("pagos")
+      .select("monto_cent")
+      .eq("contabilizado_en_periodo", periodo.id);
+    ingresos = (data ?? []).reduce((a, p) => a + p.monto_cent, 0);
+  } else {
+    const { data } = await s
+      .from("pagos")
+      .select("monto_cent")
+      .is("contabilizado_en_periodo", null);
+    ingresos = (data ?? []).reduce((a, p) => a + p.monto_cent, 0);
+  }
+
+  const { data: egresos } = await s
+    .from("egresos")
+    .select("monto_cent, pagado")
+    .eq("periodo_id", periodo.id);
+  const egresosPagados = (egresos ?? [])
+    .filter((e) => e.pagado)
+    .reduce((a, e) => a + e.monto_cent, 0);
+  const porPagar = (egresos ?? [])
+    .filter((e) => !e.pagado)
+    .reduce((a, e) => a + e.monto_cent, 0);
+
+  const saldoInicial = periodo.saldo_inicial_cent ?? 0;
+  const saldoActual =
+    periodo.estado === "cerrado" && periodo.saldo_final_cent !== null
+      ? periodo.saldo_final_cent
+      : saldoInicial + ingresos - egresosPagados;
+
+  return {
+    periodo,
+    saldoInicialCent: saldoInicial,
+    saldoInicialPendiente: periodo.saldo_inicial_cent === null,
+    ingresosCent: ingresos,
+    egresosPagadosCent: egresosPagados,
+    porPagarCent: porPagar,
+    saldoActualCent: saldoActual,
+  };
+}
+
+// Historial de cierres (periodos cerrados, más reciente primero).
+export async function getCierres(): Promise<Periodo[]> {
+  const s = createClient();
+  const { data } = await s
+    .from("periodos")
+    .select("*")
+    .eq("estado", "cerrado")
+    .order("anio", { ascending: false })
+    .order("mes", { ascending: false });
+  return data ?? [];
+}
+
+// ---------- Morosidad (2.5) ----------
+export type DeudaCuota = {
+  anio: number;
+  mes: number;
+  saldoCent: number;
+};
+export type DeudaDpto = {
+  dpto: number;
+  totalCent: number;
+  cuotas: DeudaCuota[]; // más antigua primero
+};
+
+// Cuotas emitidas/cerradas con saldo pendiente, agrupadas por dpto.
+export async function getDeudasPorDpto(): Promise<DeudaDpto[]> {
+  const s = createClient();
+  const { data: periodos } = await s
+    .from("periodos")
+    .select("id, anio, mes")
+    .in("estado", ["emitido", "cerrado"]);
+  const infoPeriodo = new Map((periodos ?? []).map((p) => [p.id, p]));
+  const ids = [...infoPeriodo.keys()];
+  if (ids.length === 0) return [];
+
+  const { data: cuotas } = await s
+    .from("cuotas")
+    .select("id, periodo_id, dpto_id, total_cent")
+    .in("periodo_id", ids);
+  const listaCuotas = cuotas ?? [];
+  if (listaCuotas.length === 0) return [];
+
+  const { data: pagos } = await s
+    .from("pagos")
+    .select("cuota_id, monto_cent")
+    .in("cuota_id", listaCuotas.map((c) => c.id));
+  const pagado = new Map<number, number>();
+  for (const p of pagos ?? []) {
+    pagado.set(p.cuota_id, (pagado.get(p.cuota_id) ?? 0) + p.monto_cent);
+  }
+
+  const porDpto = new Map<number, DeudaCuota[]>();
+  for (const c of listaCuotas) {
+    const saldo = c.total_cent - (pagado.get(c.id) ?? 0);
+    if (saldo <= 0) continue;
+    const p = infoPeriodo.get(c.periodo_id)!;
+    const lista = porDpto.get(c.dpto_id) ?? [];
+    lista.push({ anio: p.anio, mes: p.mes, saldoCent: saldo });
+    porDpto.set(c.dpto_id, lista);
+  }
+
+  return [...porDpto.entries()]
+    .map(([dpto, cuotas]) => ({
+      dpto,
+      cuotas: cuotas.sort((a, b) => a.anio * 12 + a.mes - (b.anio * 12 + b.mes)),
+      totalCent: cuotas.reduce((a, c) => a + c.saldoCent, 0),
+    }))
+    .sort((a, b) => a.dpto - b.dpto);
+}
+
+// ---------- Consumo de agua, últimos 6 meses (para el dashboard 2.4) ----------
+export type ConsumoDpto = {
+  dpto: number;
+  meses: Array<{ anio: number; mes: number; m3: number }>; // más antiguo primero
+};
+
+export async function getConsumo6Meses(): Promise<ConsumoDpto[]> {
+  const s = createClient();
+  const { data: periodos } = await s
+    .from("periodos")
+    .select("id, anio, mes")
+    .order("anio", { ascending: false })
+    .order("mes", { ascending: false })
+    .limit(6);
+  const lista = (periodos ?? []).sort(
+    (a, b) => a.anio * 12 + a.mes - (b.anio * 12 + b.mes),
+  );
+  if (lista.length === 0) return [];
+
+  const { data: lecturas } = await s
+    .from("lecturas_agua")
+    .select("periodo_id, dpto_id, lectura_anterior, lectura_actual")
+    .in("periodo_id", lista.map((p) => p.id));
+
+  const porDpto = new Map<number, Map<number, number>>(); // dpto → periodo_id → m3
+  for (const l of lecturas ?? []) {
+    const m = porDpto.get(l.dpto_id) ?? new Map<number, number>();
+    m.set(l.periodo_id, l.lectura_actual - l.lectura_anterior);
+    porDpto.set(l.dpto_id, m);
+  }
+
+  return [...porDpto.entries()]
+    .map(([dpto, porPeriodo]) => ({
+      dpto,
+      meses: lista
+        .filter((p) => porPeriodo.has(p.id))
+        .map((p) => ({ anio: p.anio, mes: p.mes, m3: porPeriodo.get(p.id)! })),
+    }))
+    .sort((a, b) => a.dpto - b.dpto);
+}
+
+// ---------- Provisiones (saldo acumulado, para el dashboard) ----------
+export type SaldoProvision = { concepto: string; saldoCent: number };
+
+export async function getSaldosProvisiones(): Promise<SaldoProvision[]> {
+  const s = createClient();
+  const [{ data: provisiones }, { data: movimientos }] = await Promise.all([
+    s.from("provisiones").select("id, concepto").eq("activo", true).order("id"),
+    s.from("movimientos_provision").select("provision_id, monto_cent"),
+  ]);
+  const saldo = new Map<number, number>();
+  for (const m of movimientos ?? []) {
+    saldo.set(m.provision_id, (saldo.get(m.provision_id) ?? 0) + m.monto_cent);
+  }
+  return (provisiones ?? []).map((p) => ({
+    concepto: p.concepto,
+    saldoCent: saldo.get(p.id) ?? 0,
+  }));
+}

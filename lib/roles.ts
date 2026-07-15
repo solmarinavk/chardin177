@@ -120,12 +120,12 @@ export const MENU: ItemMenu[] = [
     activo: true,
   },
   {
-    href: "/egresos",
-    etiqueta: "Egresos",
-    corta: "Egresos",
+    href: "/caja",
+    etiqueta: "Caja y egresos",
+    corta: "Caja",
     icono: "recibo",
-    roles: ["tesoreria", "admin"],
-    activo: false,
+    roles: ["tesoreria", "admin", "residente"],
+    activo: true,
   },
   {
     href: "/usuarios",

@@ -2,8 +2,10 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { requireRol } from "@/lib/roles";
 import { getEstadosDeCuenta } from "@/lib/periodos";
+import { getDeudasPorDpto } from "@/lib/caja";
+import { etiquetaPeriodo, mesesDesde, textoAntiguedad } from "@/lib/fechas";
 import { formatoPEN } from "@/lib/centimos";
-import { IconoCheck } from "@/components/iconos";
+import { IconoCheck, IconoFlecha, IconoAlerta } from "@/components/iconos";
 
 export const metadata: Metadata = { title: "Estado de cuenta" };
 
@@ -11,11 +13,16 @@ export default async function EstadoCuentaPage() {
   // Portería solo usa lecturas (PROPUESTA §5).
   const perfil = await requireRol(["tesoreria", "admin", "residente"]);
 
-  const todos = await getEstadosDeCuenta();
+  const [todos, deudas] = await Promise.all([
+    getEstadosDeCuenta(),
+    getDeudasPorDpto(),
+  ]);
   // Si el perfil está asociado a un dpto, muestra solo el suyo; si no
   // (cuenta compartida de vecinos), muestra todos (transparencia).
   const filas =
     perfil.dpto_id != null ? todos.filter((f) => f.dpto === perfil.dpto_id) : todos;
+  const deudasVisibles =
+    perfil.dpto_id != null ? deudas.filter((d) => d.dpto === perfil.dpto_id) : deudas;
 
   const totCargos = filas.reduce((a, f) => a + f.cargos, 0);
   const totAbonos = filas.reduce((a, f) => a + f.abonos, 0);
@@ -124,6 +131,75 @@ export default async function EstadoCuentaPage() {
             Al día = pagó todo lo emitido. Un saldo negativo es un adelanto a
             favor del departamento.
           </p>
+
+          {/* ——— Morosidad con antigüedad (2.5) ——— */}
+          {deudasVisibles.length > 0 && (
+            <section
+              className="card animar-aparecer p-5"
+              style={{ animationDelay: "100ms" }}
+            >
+              <h2 className="titulo-seccion mb-3">Deudas por departamento</h2>
+              <ul className="flex flex-col gap-2">
+                {deudasVisibles.map((d) => {
+                  const masAntigua = d.cuotas[0];
+                  const antiguedad = masAntigua
+                    ? mesesDesde(masAntigua.anio, masAntigua.mes)
+                    : 0;
+                  return (
+                    <li
+                      key={d.dpto}
+                      className="rounded-xl border border-slate-200 p-3"
+                    >
+                      <details className="group">
+                        <summary className="flex cursor-pointer list-none items-center justify-between gap-2">
+                          <span className="flex items-center gap-2">
+                            <IconoFlecha className="h-3.5 w-3.5 text-slate-400 transition-transform group-open:rotate-90" />
+                            <span className="font-bold text-slate-900">
+                              Dpto {d.dpto}
+                            </span>
+                            {antiguedad >= 2 && (
+                              <span className="chip bg-red-100 text-red-800">
+                                <IconoAlerta className="h-3 w-3" />
+                                {textoAntiguedad(antiguedad)}
+                              </span>
+                            )}
+                          </span>
+                          <span className="num font-bold text-red-700">
+                            {formatoPEN(d.totalCent)}
+                          </span>
+                        </summary>
+                        <ul className="num mt-2 flex flex-col gap-1 border-t border-slate-100 pt-2 text-sm">
+                          {d.cuotas.map((c) => (
+                            <li
+                              key={`${c.anio}-${c.mes}`}
+                              className="flex items-baseline justify-between gap-2"
+                            >
+                              <span className="text-slate-600">
+                                {etiquetaPeriodo(c.anio, c.mes)}
+                                <span className="text-xs text-slate-400">
+                                  {" · "}
+                                  {mesesDesde(c.anio, c.mes) === 0
+                                    ? "este mes"
+                                    : `hace ${textoAntiguedad(mesesDesde(c.anio, c.mes))}`}
+                                </span>
+                              </span>
+                              <span className="font-semibold text-slate-900">
+                                {formatoPEN(c.saldoCent)}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      </details>
+                    </li>
+                  );
+                })}
+              </ul>
+              <p className="mt-3 text-xs text-slate-500">
+                Las deudas se pagan desde la cobranza del periodo correspondiente;
+                el dinero entra a la caja del mes en que se cobra.
+              </p>
+            </section>
+          )}
         </>
       )}
     </main>

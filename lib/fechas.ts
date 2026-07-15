@@ -55,3 +55,17 @@ export function hoyLima(): string {
   }).format(new Date());
   return partes; // en-CA da 'YYYY-MM-DD'
 }
+
+// Meses transcurridos desde un periodo (anio, mes) hasta hoy (Lima).
+// 0 = es el mes en curso; 1 = el mes pasado; etc.
+export function mesesDesde(anio: number, mes: number): number {
+  const [a, m] = hoyLima().split("-").map((x) => Number(x));
+  return Math.max(0, (a ?? anio) * 12 + (m ?? mes) - (anio * 12 + mes));
+}
+
+// "este mes" / "1 mes" / "N meses" (antigüedad de una deuda).
+export function textoAntiguedad(meses: number): string {
+  if (meses <= 0) return "este mes";
+  if (meses === 1) return "1 mes";
+  return `${meses} meses`;
+}

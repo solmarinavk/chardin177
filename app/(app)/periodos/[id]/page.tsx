@@ -8,6 +8,7 @@ import {
   getPagosPorCuota,
   type ResumenPeriodo,
 } from "@/lib/periodos";
+import { getLibroCaja } from "@/lib/caja";
 import { pasosDelMes } from "@/lib/flujo";
 import { etiquetaPeriodo, formatoFecha, hoyLima } from "@/lib/fechas";
 import { formatoPEN } from "@/lib/centimos";
@@ -28,6 +29,7 @@ import {
   emitirPeriodo,
   registrarPago,
   anularPago,
+  cerrarPeriodo,
 } from "../acciones";
 
 const MEDIO_TEXTO: Record<string, string> = {
@@ -272,6 +274,11 @@ export default async function PeriodoDetallePage({
             <PagosSection resumen={resumen} periodoId={id} />
           )}
 
+          {/* Cerrar el mes (2.3) */}
+          {gestiona && periodo.estado === "emitido" && (
+            <CierreSection resumen={resumen} periodoId={id} />
+          )}
+
           {/* Desglose */}
           <section className="card animar-aparecer p-5">
             <h2 className="titulo-seccion mb-3">Cuotas del mes</h2>
@@ -334,6 +341,87 @@ export default async function PeriodoDetallePage({
         </>
       )}
     </main>
+  );
+}
+
+// Cierre de mes (2.3): resumen de caja, aviso de morosos y botón Cerrar.
+async function CierreSection({
+  resumen,
+  periodoId,
+}: {
+  resumen: ResumenPeriodo;
+  periodoId: number;
+}) {
+  const libro = await getLibroCaja(resumen.periodo);
+  const morosos = resumen.cuotas.filter((c) => c.estado !== "pagado");
+  const deudaCent = morosos.reduce(
+    (a, c) => a + c.total_cent - (resumen.pagadoPorCuota.get(c.id) ?? 0),
+    0,
+  );
+
+  return (
+    <section id="cerrar" className="card animar-aparecer scroll-mt-24 p-5">
+      <h2 className="titulo-seccion mb-3">Cerrar el mes</h2>
+
+      <dl className="num flex flex-col gap-1.5 text-sm">
+        <div className="flex items-baseline justify-between">
+          <dt className="text-slate-600">Saldo inicial</dt>
+          <dd className="font-semibold">{formatoPEN(libro.saldoInicialCent)}</dd>
+        </div>
+        <div className="flex items-baseline justify-between">
+          <dt className="text-slate-600">+ Ingresos cobrados (incluye atrasos)</dt>
+          <dd className="font-semibold text-emerald-700">
+            {formatoPEN(libro.ingresosCent)}
+          </dd>
+        </div>
+        <div className="flex items-baseline justify-between">
+          <dt className="text-slate-600">− Egresos pagados</dt>
+          <dd className="font-semibold text-red-700">
+            {formatoPEN(libro.egresosPagadosCent)}
+          </dd>
+        </div>
+        <div className="flex items-baseline justify-between border-t border-slate-200 pt-1.5">
+          <dt className="font-bold text-slate-900">Saldo final al cerrar</dt>
+          <dd className="text-lg font-black text-slate-900">
+            {formatoPEN(libro.saldoActualCent)}
+          </dd>
+        </div>
+      </dl>
+
+      {morosos.length > 0 && (
+        <p className="mt-3 flex items-start gap-1.5 rounded-xl bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800">
+          <IconoAlerta className="mt-0.5 h-4 w-4 shrink-0" />
+          {morosos.length} departamento{morosos.length === 1 ? "" : "s"} deben{" "}
+          {formatoPEN(deudaCent)} en total. Al cerrar, esa deuda pasa a su cuenta
+          corriente y podrá pagarse en los meses siguientes.
+        </p>
+      )}
+      {libro.porPagarCent > 0 && (
+        <p className="mt-2 flex items-start gap-1.5 rounded-xl bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800">
+          <IconoAlerta className="mt-0.5 h-4 w-4 shrink-0" />
+          Hay egresos por pagar por {formatoPEN(libro.porPagarCent)} que NO se
+          descuentan de esta caja. Márcalos como pagados antes de cerrar si ya
+          salieron del dinero del edificio.
+        </p>
+      )}
+
+      <p className="mt-3 text-sm text-slate-600">
+        Al cerrar: el saldo final queda fijado, los pagos cobrados quedan
+        contabilizados (ya no se pueden anular), los egresos del mes se congelan
+        y se abre el mes siguiente con el saldo arrastrado.
+      </p>
+
+      <div className="mt-4">
+        <FormAccionPeriodo
+          accion={cerrarPeriodo}
+          periodoId={periodoId}
+          texto="Cerrar el mes"
+          textoEnviando="Cerrando…"
+          className="btn-primary w-full"
+          confirmar={`¿Cerrar ${etiquetaPeriodo(resumen.periodo.anio, resumen.periodo.mes)}? El saldo final quedará fijado y se abrirá el mes siguiente.`}
+        />
+      </div>
+    </section>
   );
 }
 

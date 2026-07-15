@@ -95,10 +95,15 @@ export function pasosDelMes(p: PeriodoLite, d: DatosFlujo): Paso[] {
       clave: "cerrar",
       titulo: "Cerrar el mes",
       descripcion:
-        "Cuadra la caja y arrastra el saldo al mes siguiente. Llega en la Fase 2.",
-      detalle: p.estado === "cerrado" ? null : "Fase 2",
-      estado: p.estado === "cerrado" ? "hecho" : "bloqueado",
-      href: null,
+        "Cuadra la caja, fija el saldo final y abre el mes siguiente con el saldo arrastrado. Las cuotas impagas pasan como deuda.",
+      detalle: null,
+      estado:
+        p.estado === "cerrado"
+          ? "hecho"
+          : p.estado === "emitido"
+            ? "pendiente"
+            : "bloqueado",
+      href: `${base}#cerrar`,
       cta: "Cerrar mes",
     },
   ];

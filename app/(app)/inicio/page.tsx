@@ -2,11 +2,20 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { getPerfil, ETIQUETA_ROL, menuPara, rolEsRedundante } from "@/lib/roles";
 import { getPeriodoActual, getResumenPeriodo } from "@/lib/periodos";
+import {
+  getPeriodoAbierto,
+  getLibroCaja,
+  getEgresos,
+  getConsumo6Meses,
+  getSaldosProvisiones,
+} from "@/lib/caja";
 import { pasosDelMes, pasoActual } from "@/lib/flujo";
 import { etiquetaPeriodo, formatoFecha, hoyLima } from "@/lib/fechas";
 import { formatoPEN } from "@/lib/centimos";
+import { BUCKET_COMPROBANTES, urlFirmada } from "@/lib/storage";
 import { Progreso } from "@/components/Progreso";
 import { SemaforoMini } from "@/components/Semaforo";
+import { ConsumoAgua } from "@/components/ConsumoAgua";
 import { EstadoPeriodoBadge, EstadoCuotaBadge } from "@/components/estados";
 import { ICONOS, IconoFlecha, IconoGota } from "@/components/iconos";
 
@@ -136,8 +145,8 @@ export default async function InicioPage() {
               <h3 className="text-xl font-bold">¡Mes al día! 🎉</h3>
               <p className="mt-1 text-sm text-emerald-100">
                 {resumen.periodo.estado === "cerrado"
-                  ? "Este periodo está cerrado. Puedes crear el siguiente."
-                  : "Todos los departamentos pagaron. El cierre de mes llega en la Fase 2."}
+                  ? "Este periodo está cerrado y su saldo ya pasó al siguiente."
+                  : "Todos los departamentos pagaron."}
               </p>
               {resumen.periodo.estado === "cerrado" && (
                 <Link
@@ -194,6 +203,9 @@ export default async function InicioPage() {
         />
       )}
 
+      {/* ——— Dashboard de transparencia (2.4): caja, gastos, agua, provisiones ——— */}
+      {periodo && perfil.rol !== "porteria" && <Transparencia />}
+
       {/* ——— Accesos rápidos ——— */}
       <section
         className="animar-aparecer grid grid-cols-2 gap-3"
@@ -220,6 +232,128 @@ export default async function InicioPage() {
           })}
       </section>
     </main>
+  );
+}
+
+// Dashboard de transparencia (2.4): saldo de caja en vivo, últimos gastos con
+// comprobante, consumo de agua de 6 meses y provisiones.
+async function Transparencia() {
+  const abierto = await getPeriodoAbierto();
+  const [libro, consumos, provisiones] = await Promise.all([
+    abierto ? getLibroCaja(abierto) : Promise.resolve(null),
+    getConsumo6Meses(),
+    getSaldosProvisiones(),
+  ]);
+  const ultimosEgresos = (await getEgresos({})).slice(0, 5);
+
+  const urls = new Map<number, string>();
+  for (const e of ultimosEgresos) {
+    if (e.comprobante_url) {
+      const url = await urlFirmada(BUCKET_COMPROBANTES, e.comprobante_url);
+      if (url) urls.set(e.id, url);
+    }
+  }
+
+  const totalProvisiones = provisiones.reduce((a, p) => a + p.saldoCent, 0);
+
+  return (
+    <>
+      {libro && (
+        <section
+          className="card animar-aparecer p-5"
+          style={{ animationDelay: "40ms" }}
+        >
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <h2 className="titulo-seccion">Caja del edificio</h2>
+              <p className="num mt-1 text-3xl font-black text-slate-900">
+                {formatoPEN(libro.saldoActualCent)}
+              </p>
+              <p className="text-xs text-slate-500">
+                {etiquetaPeriodo(libro.periodo.anio, libro.periodo.mes)} · saldo en
+                vivo
+              </p>
+            </div>
+            <Link
+              href="/caja"
+              className="btn-secondary min-h-[40px] shrink-0 px-3 py-2 text-sm"
+            >
+              Ver caja
+              <IconoFlecha className="h-4 w-4" />
+            </Link>
+          </div>
+          {totalProvisiones !== 0 && (
+            <p className="num mt-3 rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-600">
+              Provisiones apartadas (vigilante):{" "}
+              <span className="font-bold text-slate-900">
+                {formatoPEN(totalProvisiones)}
+              </span>{" "}
+              · disponible real:{" "}
+              <span className="font-bold text-slate-900">
+                {formatoPEN(libro.saldoActualCent - totalProvisiones)}
+              </span>
+            </p>
+          )}
+        </section>
+      )}
+
+      {ultimosEgresos.length > 0 && (
+        <section
+          className="card animar-aparecer p-5"
+          style={{ animationDelay: "60ms" }}
+        >
+          <h2 className="titulo-seccion mb-3">Últimos gastos</h2>
+          <ul className="flex flex-col gap-2">
+            {ultimosEgresos.map((e) => (
+              <li
+                key={e.id}
+                className="flex items-baseline justify-between gap-3 text-sm"
+              >
+                <span className="min-w-0">
+                  <span className="font-medium text-slate-800">{e.concepto}</span>{" "}
+                  <span className="num text-xs text-slate-400">
+                    {formatoFecha(e.fecha)}
+                  </span>
+                  {urls.has(e.id) && (
+                    <>
+                      {" "}
+                      <a
+                        href={urls.get(e.id)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-xs font-semibold text-slate-500 underline underline-offset-2 hover:text-slate-900"
+                      >
+                        comprobante
+                      </a>
+                    </>
+                  )}
+                </span>
+                <span className="num shrink-0 font-bold text-slate-900">
+                  {formatoPEN(e.monto_cent)}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <Link
+            href="/caja"
+            className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-slate-600 hover:text-slate-900"
+          >
+            Ver todos los egresos
+            <IconoFlecha className="h-4 w-4" />
+          </Link>
+        </section>
+      )}
+
+      {consumos.length > 0 && (
+        <section
+          className="card animar-aparecer p-5"
+          style={{ animationDelay: "80ms" }}
+        >
+          <h2 className="titulo-seccion mb-3">Consumo de agua por departamento</h2>
+          <ConsumoAgua consumos={consumos} />
+        </section>
+      )}
+    </>
   );
 }
 
