@@ -16,6 +16,8 @@ import { getConstanciasPendientes } from "@/lib/constancias";
 import { pasosDelMes } from "@/lib/flujo";
 import { etiquetaPeriodo, formatoFecha, hoyLima } from "@/lib/fechas";
 import { formatoPEN } from "@/lib/centimos";
+import { textoResumenMes } from "@/lib/recibo";
+import { ResumenMes } from "@/components/ResumenMes";
 import { BUCKET_COMPROBANTES, urlFirmada } from "@/lib/storage";
 import { EstadoPeriodoBadge } from "@/components/estados";
 import { BotonExcel } from "@/components/BotonExcel";
@@ -345,6 +347,24 @@ export default async function PeriodoDetallePage({
             <p className="mt-2 text-xs text-slate-500">
               Abre el recibo de un dpto para compartirlo por WhatsApp o imprimirlo.
             </p>
+
+            {/* Resumen del mes completo para el grupo del edificio */}
+            <div className="mt-4 border-t border-slate-100 pt-4">
+              <h3 className="titulo-seccion mb-1">Resumen del mes para WhatsApp</h3>
+              <p className="mb-3 text-sm text-slate-600">
+                Los 10 departamentos en un solo mensaje, listo para el grupo del
+                edificio.
+              </p>
+              <ResumenMes
+                texto={textoResumenMes(
+                  periodo.anio,
+                  periodo.mes,
+                  resumen.cuotas,
+                  resumen.pagadoPorCuota,
+                  { vence: periodo.estado === "emitido" },
+                )}
+              />
+            </div>
           </section>
 
           {periodo.estado === "cerrado" && (

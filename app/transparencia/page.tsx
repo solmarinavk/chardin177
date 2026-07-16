@@ -12,7 +12,8 @@ import { Edificio } from "@/components/Edificio";
 import { mapaEdificio } from "@/lib/edificio";
 import { TIPOS_DATO, TIPOS_DATO_PUBLICO } from "@/lib/exportar_datos";
 import { SelectorMes } from "@/components/SelectorMes";
-import { CompartirCuentas } from "@/components/CompartirCuentas";
+import { ResumenMes } from "@/components/ResumenMes";
+import { textoResumenMes } from "@/lib/recibo";
 import { ConsumoAgua } from "@/components/ConsumoAgua";
 import { Progreso } from "@/components/Progreso";
 import {
@@ -197,8 +198,13 @@ export default async function TransparenciaPage({
               Toca una ventana para ver el detalle del departamento.
             </p>
             <div className="mt-4">
-              <CompartirCuentas
-                resumen={`Las cuentas del edificio Chardin 177 — ${etiquetaPeriodo(d.semaforo.periodo.anio, d.semaforo.periodo.mes)}: recaudado ${formatoPEN(d.semaforo.recaudadoCent)} de ${formatoPEN(d.semaforo.esperadoCent)} · ${d.semaforo.cuotas.filter((c) => c.estado === "pagado").length} dptos al día, ${d.semaforo.cuotas.filter((c) => c.estado !== "pagado").length} por pagar.`}
+              <ResumenMes
+                texto={textoResumenMes(
+                  d.semaforo.periodo.anio,
+                  d.semaforo.periodo.mes,
+                  d.semaforo.cuotas,
+                  d.semaforo.pagadoPorCuota,
+                )}
               />
             </div>
           </section>
