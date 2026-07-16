@@ -74,7 +74,31 @@ describe("migración histórica (4.1)", () => {
     expect(sql).toContain("(2024, 2, 'cerrado', 100000, 105000");
   });
 
+  it("acepta meses sin saldo de caja (null) sin romper la cadena", () => {
+    const plan: PlanMigracion = {
+      meses: [
+        { anio: 2024, mes: 2, saldo_inicial_cent: null, saldo_final_cent: null },
+        { anio: 2025, mes: 7, saldo_inicial_cent: 300000, saldo_final_cent: 305000 },
+        { anio: 2025, mes: 8, saldo_inicial_cent: 305000, saldo_final_cent: 310000 },
+      ],
+      cuotas: [],
+    };
+    const v = validarMigracion(plan);
+    expect(v.ok).toBe(true);
+    expect(v.saldoFinalUltimoCent).toBe(310000);
+    expect(generarSqlMigracion(plan)).toContain("(2024, 2, 'cerrado', null, null");
+  });
+
+  it("con empalmarCon: UPDATE al periodo operativo (no lo inserta ni lo duplica)", () => {
+    const sql = generarSqlMigracion(planOk, { empalmarCon: { anio: 2026, mes: 7 } });
+    expect(sql).toContain(
+      "update periodos set saldo_inicial_cent = 110500 where anio = 2026 and mes = 7",
+    );
+    expect(sql).toMatch(/no se puede empalmar/); // aborta si julio no existe
+    expect(sql).toMatch(/Empalme roto: 2026-7 ya tiene saldo inicial/); // aborta si difiere
+  });
+
   it("plan vacío → SQL inofensivo", () => {
-    expect(generarSqlMigracion({ meses: [], cuotas: [] })).toContain("nada que migrar");
+    expect(generarSqlMigracion({ meses: [], cuotas: [] })).toContain("Sin meses que migrar");
   });
 });

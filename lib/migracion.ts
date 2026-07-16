@@ -11,23 +11,29 @@ export type FilaCuotaHist = {
   total_cent: number; // total pagado por ese dpto ese mes (céntimos enteros)
 };
 
+// Saldos de un mes. Pueden ser null: hay meses con cuotas pero sin registro de
+// caja en el Excel (la hoja Caja empieza más tarde que la hoja Cuotas).
 export type SaldoMesHist = {
   anio: number;
   mes: number;
-  saldo_inicial_cent: number;
-  saldo_final_cent: number;
+  saldo_inicial_cent: number | null;
+  saldo_final_cent: number | null;
 };
 
 export type PlanMigracion = {
-  meses: SaldoMesHist[]; // hoja "Caja"
+  meses: SaldoMesHist[]; // un elemento por periodo a crear (con o sin saldo)
   cuotas: FilaCuotaHist[]; // hoja "Cuotas"
 };
+
+// Empalme: el periodo operativo ya existente cuyo saldo inicial se debe fijar
+// con el saldo final del último mes histórico.
+export type Empalme = { anio: number; mes: number };
 
 export type Validacion = {
   ok: boolean;
   errores: string[]; // bloquean la carga
   advertencias: string[]; // no bloquean
-  saldoFinalUltimoCent: number | null; // el que debe empalmar con el 1er mes operativo
+  saldoFinalUltimoCent: number | null; // el que empalma con lo operativo
   ultimoMes: { anio: number; mes: number } | null;
   totalMeses: number;
   totalCuotas: number;
@@ -43,8 +49,8 @@ function etiqueta(x: { anio: number; mes: number }): string {
   return `${String(x.mes).padStart(2, "0")}/${x.anio}`;
 }
 
-// Valida el plan: céntimos enteros, cadena de saldos sin saltos, 10 dptos por
-// mes. Devuelve el saldo final del último mes (el que empalma con lo operativo).
+// Valida el plan: céntimos enteros, cadena de saldos sin saltos (solo donde hay
+// saldos), 10 dptos por mes. Devuelve el saldo final del último mes.
 export function validarMigracion(plan: PlanMigracion): Validacion {
   const errores: string[] = [];
   const advertencias: string[] = [];
@@ -53,8 +59,10 @@ export function validarMigracion(plan: PlanMigracion): Validacion {
 
   // 1) Céntimos enteros (regla de oro: nada de floats).
   for (const m of meses) {
-    if (!esCentimosEntero(m.saldo_inicial_cent) || !esCentimosEntero(m.saldo_final_cent))
-      errores.push(`Saldo no entero (céntimos) en ${etiqueta(m)}.`);
+    if (m.saldo_inicial_cent !== null && !esCentimosEntero(m.saldo_inicial_cent))
+      errores.push(`Saldo inicial no entero (céntimos) en ${etiqueta(m)}.`);
+    if (m.saldo_final_cent !== null && !esCentimosEntero(m.saldo_final_cent))
+      errores.push(`Saldo final no entero (céntimos) en ${etiqueta(m)}.`);
   }
   for (const c of plan.cuotas) {
     if (!esCentimosEntero(c.total_cent))
@@ -64,15 +72,22 @@ export function validarMigracion(plan: PlanMigracion): Validacion {
   // 2) Meses únicos.
   const vistos = new Set<number>();
   for (const m of meses) {
-    if (vistos.has(orden(m))) errores.push(`Mes repetido en Caja: ${etiqueta(m)}.`);
+    if (vistos.has(orden(m))) errores.push(`Mes repetido: ${etiqueta(m)}.`);
     vistos.add(orden(m));
   }
 
-  // 3) Empalme interno sin saltos: saldo_final[m] === saldo_inicial[m+1].
+  // 3) Empalme interno sin saltos: solo entre meses consecutivos que tengan
+  //    saldos en ambos extremos (los meses sin caja no cortan la validación).
   for (let i = 1; i < meses.length; i++) {
     const prev = meses[i - 1]!;
     const cur = meses[i]!;
-    if (orden(cur) === orden(prev) + 1 && prev.saldo_final_cent !== cur.saldo_inicial_cent) {
+    const consecutivos = orden(cur) === orden(prev) + 1;
+    if (
+      consecutivos &&
+      prev.saldo_final_cent !== null &&
+      cur.saldo_inicial_cent !== null &&
+      prev.saldo_final_cent !== cur.saldo_inicial_cent
+    ) {
       errores.push(
         `Salto de saldo: el final de ${etiqueta(prev)} (${prev.saldo_final_cent}) no coincide con el inicial de ${etiqueta(cur)} (${cur.saldo_inicial_cent}).`,
       );
@@ -84,13 +99,13 @@ export function validarMigracion(plan: PlanMigracion): Validacion {
 
   // 4) 10 departamentos por mes (aviso, no bloquea).
   const porMes = new Map<number, Set<number>>();
-  const mesesConCuotas = new Set(meses.map(orden));
+  const mesesConPeriodo = new Set(meses.map(orden));
   for (const c of plan.cuotas) {
     const k = orden(c);
     if (!porMes.has(k)) porMes.set(k, new Set());
     porMes.get(k)!.add(c.dpto);
-    if (!mesesConCuotas.has(k))
-      advertencias.push(`Cuota de un mes sin fila en Caja: ${etiqueta(c)} (dpto ${c.dpto}).`);
+    if (!mesesConPeriodo.has(k))
+      advertencias.push(`Cuota de un mes sin periodo: ${etiqueta(c)} (dpto ${c.dpto}).`);
   }
   for (const m of meses) {
     const n = porMes.get(orden(m))?.size ?? 0;
@@ -115,40 +130,30 @@ function finDeMes(anio: number, mes: number): string {
   return new Date(Date.UTC(anio, mes, 0)).toISOString().slice(0, 10);
 }
 
-// Genera el SQL de la migración (para pegar en el SQL Editor de Supabase).
-// Todo dentro de una transacción, con un chequeo de empalme que ABORTA si el
-// primer periodo operativo ya existe con un saldo inicial distinto.
-export function generarSqlMigracion(plan: PlanMigracion): string {
-  const meses = [...plan.meses].sort((a, b) => orden(a) - orden(b));
-  const cuotas = [...plan.cuotas].sort((a, b) => orden(a) - orden(b) || a.dpto - b.dpto);
-  if (meses.length === 0) return "-- Sin meses en la hoja Caja: nada que migrar.\n";
+const lit = (v: number | null): string => (v === null ? "null" : String(v));
 
-  const ultimo = meses[meses.length - 1]!;
-  const ordenUltimo = orden(ultimo);
-  const saldoFinal = ultimo.saldo_final_cent;
+// Bloque de empalme cuando se conoce el periodo operativo (ej. julio 2026):
+// fija su saldo inicial con el saldo final histórico y ABORTA si ya tuviera otro.
+function bloqueEmpalmeUpdate(emp: Empalme, saldoFinal: number): string {
+  return `-- 0) Empalme con el periodo operativo ${emp.anio}-${String(emp.mes).padStart(2, "0")}:
+--    fija su saldo inicial con el saldo final histórico (${saldoFinal}) y aborta si ya tuviera otro.
+do $$
+declare v_ini integer;
+begin
+  if not exists (select 1 from periodos where anio = ${emp.anio} and mes = ${emp.mes}) then
+    raise exception 'No existe el periodo ${emp.anio}-${emp.mes} en la plataforma; no se puede empalmar.';
+  end if;
+  select saldo_inicial_cent into v_ini from periodos where anio = ${emp.anio} and mes = ${emp.mes};
+  if v_ini is not null and v_ini is distinct from ${saldoFinal} then
+    raise exception 'Empalme roto: ${emp.anio}-${emp.mes} ya tiene saldo inicial % pero el histórico cierra en ${saldoFinal}', v_ini;
+  end if;
+  update periodos set saldo_inicial_cent = ${saldoFinal} where anio = ${emp.anio} and mes = ${emp.mes};
+end $$;`;
+}
 
-  const filasPeriodos = meses
-    .map((m) => {
-      const fin = finDeMes(m.anio, m.mes);
-      return `  (${m.anio}, ${m.mes}, 'cerrado', ${m.saldo_inicial_cent}, ${m.saldo_final_cent}, '${fin}T12:00:00Z', '${fin}T12:00:00Z')`;
-    })
-    .join(",\n");
-
-  const filasCuotas = cuotas
-    .map((c) => `  (${c.anio}, ${c.mes}, ${c.dpto}, ${c.total_cent})`)
-    .join(",\n");
-
-  const filasMesesLista = meses.map((m) => `(${m.anio}, ${m.mes})`).join(", ");
-
-  return `-- ============================================================
--- Migración histórica · Chardin 177 (generado por scripts/migrar_excel.ts)
--- Volcado FIEL del Excel auditado; NO se recalcula con el motor.
--- ${meses.length} meses (${etiqueta(meses[0]!)} → ${etiqueta(ultimo)}), ${cuotas.length} cuotas.
--- Revísalo y pégalo en Supabase → SQL Editor. Es re-ejecutable (on conflict).
--- ============================================================
-begin;
-
--- 0) Empalme: si ya existe un periodo operativo posterior, su saldo inicial
+// Bloque de empalme genérico (sin periodo objetivo conocido): solo comprueba.
+function bloqueEmpalmeCheck(ordenUltimo: number, saldoFinal: number): string {
+  return `-- 0) Empalme: si ya existe un periodo operativo posterior, su saldo inicial
 --    DEBE ser el saldo final histórico (${saldoFinal}). Si no, aborta todo.
 do $$
 declare v_ini integer;
@@ -159,14 +164,61 @@ begin
   if v_ini is not null and v_ini is distinct from ${saldoFinal} then
     raise exception 'Empalme roto: el primer periodo operativo tiene saldo inicial % pero el histórico cierra en %', v_ini, ${saldoFinal};
   end if;
-end $$;
+end $$;`;
+}
 
--- 1) Periodos históricos (cerrados) con sus saldos arrastrados.
+// Genera el SQL de la migración (para pegar en el SQL Editor de Supabase).
+// Todo en una transacción. Si se pasa `empalmarCon`, además FIJA el saldo inicial
+// del periodo operativo con el saldo final histórico (y aborta si no cuadra).
+export function generarSqlMigracion(
+  plan: PlanMigracion,
+  opciones: { empalmarCon?: Empalme } = {},
+): string {
+  const meses = [...plan.meses].sort((a, b) => orden(a) - orden(b));
+  const cuotas = [...plan.cuotas].sort((a, b) => orden(a) - orden(b) || a.dpto - b.dpto);
+  if (meses.length === 0) return "-- Sin meses que migrar.\n";
+
+  const ultimo = meses[meses.length - 1]!;
+  const saldoFinal = ultimo.saldo_final_cent;
+
+  const filasPeriodos = meses
+    .map((m) => {
+      const fin = finDeMes(m.anio, m.mes);
+      return `  (${m.anio}, ${m.mes}, 'cerrado', ${lit(m.saldo_inicial_cent)}, ${lit(m.saldo_final_cent)}, '${fin}T12:00:00Z', '${fin}T12:00:00Z')`;
+    })
+    .join(",\n");
+
+  const filasCuotas = cuotas
+    .map((c) => `  (${c.anio}, ${c.mes}, ${c.dpto}, ${c.total_cent})`)
+    .join(",\n");
+
+  const filasMesesLista = meses.map((m) => `(${m.anio}, ${m.mes})`).join(", ");
+
+  const emp = opciones.empalmarCon;
+  const bloqueEmpalme =
+    emp && saldoFinal !== null
+      ? bloqueEmpalmeUpdate(emp, saldoFinal)
+      : saldoFinal !== null
+        ? bloqueEmpalmeCheck(orden(ultimo), saldoFinal)
+        : "-- (Sin saldo final en el último mes: no hay empalme que fijar.)";
+
+  return `-- ============================================================
+-- Migración histórica · Chardin 177 (generado por scripts/migrar_excel.ts)
+-- Volcado FIEL del Excel auditado; NO se recalcula con el motor.
+-- ${meses.length} periodos (${etiqueta(meses[0]!)} → ${etiqueta(ultimo)}), ${cuotas.length} cuotas.
+-- Revísalo y pégalo en Supabase → SQL Editor. Es re-ejecutable (on conflict).
+-- ============================================================
+begin;
+
+${bloqueEmpalme}
+
+-- 1) Periodos históricos (cerrados) con sus saldos arrastrados (null = sin caja).
 insert into periodos (anio, mes, estado, saldo_inicial_cent, saldo_final_cent, emitido_en, cerrado_en) values
 ${filasPeriodos}
 on conflict (anio, mes) do nothing;
 
--- 2) Cuotas por departamento (solo el total; el desglose histórico no se llevaba).
+-- 2) Cuotas por departamento (solo el TOTAL, que es el valor auditado; el
+--    desglose histórico del Excel no cuadra fila a fila, así que no se carga).
 insert into cuotas (periodo_id, dpto_id, m3_variacion, agua_consumo_cent, agua_comun_cent,
   luz_cent, vigilancia_cent, manto_cent, materiales_cent, extra_cent, ajuste_cent, total_cent, estado)
 select p.id, v.dpto, 0, 0, 0, 0, 0, 0, 0, 0, 0, v.total, 'pagado'
@@ -188,7 +240,10 @@ where c.total_cent > 0
   and not exists (select 1 from pagos pg where pg.cuota_id = c.id);
 
 commit;
-
--- Recuerda: el primer periodo operativo debe iniciar con saldo ${saldoFinal}.
+${
+  emp
+    ? `-- Listo: ${emp.anio}-${String(emp.mes).padStart(2, "0")} quedó con saldo inicial ${saldoFinal}.`
+    : `-- Recuerda: el primer periodo operativo debe iniciar con saldo ${saldoFinal}.`
+}
 `;
 }
