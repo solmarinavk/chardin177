@@ -159,7 +159,7 @@ export const MENU: ItemMenu[] = [
     corta: "Ayuda",
     icono: "ayuda",
     roles: TODOS,
-    activo: false,
+    activo: true,
   },
 ];
 
