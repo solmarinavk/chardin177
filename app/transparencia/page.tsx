@@ -308,12 +308,12 @@ export default async function TransparenciaPage({
           </section>
         )}
 
-        {/* ——— Gastos con comprobante ——— */}
+        {/* ——— Gastos con comprobante (los 15 más recientes; el resto, en el Excel) ——— */}
         {d.egresos.length > 0 && (
           <section className="card animar-aparecer p-5">
             <h3 className="titulo-seccion mb-3">Gastos del edificio</h3>
             <ul className="flex flex-col divide-y divide-slate-100">
-              {d.egresos.map((e) => (
+              {d.egresos.slice(0, 15).map((e) => (
                 <li
                   key={e.id}
                   className="flex items-baseline justify-between gap-3 py-2 text-sm"
@@ -345,6 +345,12 @@ export default async function TransparenciaPage({
                 </li>
               ))}
             </ul>
+            {d.egresos.length > 15 && (
+              <p className="mt-3 text-xs text-slate-500">
+                Estos son los 15 gastos más recientes. Los anteriores están en la
+                descarga de Excel (más abajo).
+              </p>
+            )}
           </section>
         )}
 
