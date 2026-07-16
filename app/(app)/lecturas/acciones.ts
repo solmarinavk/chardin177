@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireRol } from "@/lib/roles";
+import { getPeriodo, getLecturasAnteriores } from "@/lib/periodos";
 import { enteroDesdeInput, type EstadoForm } from "@/lib/formularios";
 import { BUCKET_MEDIDORES, archivoConContenido, subirFoto } from "@/lib/storage";
 import type { Database } from "@/lib/database.types";
@@ -32,6 +33,13 @@ export async function guardarLecturas(
     data: { user },
   } = await s.auth.getUser();
 
+  // La lectura anterior NUNCA se digita (regla 1 de la matriz): el servidor la
+  // deriva del mes pasado. Solo se toma del formulario en el primer mes (o un
+  // dpto sin historial), donde se carga la base una vez.
+  const periodo = await getPeriodo(periodoId);
+  if (!periodo) return { ok: false, error: "Periodo inválido." };
+  const anteriores = await getLecturasAnteriores(periodo.anio, periodo.mes);
+
   const filas: LecturaInsert[] = [];
   let omitidas = 0;
   for (const dpto of dptos) {
@@ -40,7 +48,11 @@ export async function guardarLecturas(
       omitidas += 1; // casilla vacía: se guarda después, no es error
       continue;
     }
-    const anterior = enteroDesdeInput(formData.get(`anterior_${dpto}`));
+    const derivada = anteriores.get(dpto);
+    const anterior =
+      derivada !== undefined
+        ? derivada // hay mes previo: la impone el servidor, no el cliente
+        : enteroDesdeInput(formData.get(`anterior_${dpto}`)); // primer mes
     const actual = enteroDesdeInput(actualRaw);
     if (anterior === null || anterior < 0)
       return { ok: false, error: `Lectura anterior inválida en el dpto ${dpto}.` };

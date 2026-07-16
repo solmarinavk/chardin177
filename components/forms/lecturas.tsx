@@ -5,7 +5,7 @@ import { useFormState } from "react-dom";
 import { BotonEnviar } from "@/components/BotonEnviar";
 import { CampoFoto } from "@/components/forms/CampoFoto";
 import { Progreso } from "@/components/Progreso";
-import { IconoCheck, IconoAlerta } from "@/components/iconos";
+import { IconoCheck, IconoAlerta, IconoCandado } from "@/components/iconos";
 import { ESTADO_INICIAL, type EstadoForm } from "@/lib/formularios";
 
 type Accion = (prev: EstadoForm, fd: FormData) => Promise<EstadoForm>;
@@ -15,6 +15,7 @@ export type FilaLectura = {
   anterior: number;
   actual: number | null;
   promedio: number | null; // consumo promedio 6 meses (para alerta)
+  bloqueada: boolean; // true = hay mes previo, la anterior es de solo lectura
   fotoUrl: string | null; // URL firmada de la foto ya guardada (si hay)
 };
 
@@ -111,20 +112,39 @@ export function FormLecturas({
 
               <div className="mt-3 flex gap-3">
                 <div className="w-1/2">
-                  <label className="etiqueta" htmlFor={`anterior_${f.dpto}`}>
+                  <label
+                    className="etiqueta flex items-center gap-1"
+                    htmlFor={f.bloqueada ? undefined : `anterior_${f.dpto}`}
+                  >
                     Anterior
+                    {f.bloqueada && (
+                      <span className="inline-flex items-center gap-0.5 text-[11px] font-normal text-slate-400">
+                        <IconoCandado className="h-3 w-3" />
+                        del mes pasado
+                      </span>
+                    )}
                   </label>
-                  <input
-                    id={`anterior_${f.dpto}`}
-                    name={`anterior_${f.dpto}`}
-                    type="number"
-                    inputMode="numeric"
-                    enterKeyHint="next"
-                    min={0}
-                    value={v.anterior}
-                    onChange={(e) => set(f.dpto, "anterior", e.target.value)}
-                    className="campo num bg-slate-50"
-                  />
+                  {f.bloqueada ? (
+                    // Solo lectura: se trae sola del mes pasado (matriz, regla 1).
+                    <div
+                      className="campo num flex items-center bg-slate-100 text-slate-500"
+                      aria-label={`Lectura anterior del dpto ${f.dpto}, automática del mes pasado: ${f.anterior}`}
+                    >
+                      {f.anterior}
+                    </div>
+                  ) : (
+                    <input
+                      id={`anterior_${f.dpto}`}
+                      name={`anterior_${f.dpto}`}
+                      type="number"
+                      inputMode="numeric"
+                      enterKeyHint="next"
+                      min={0}
+                      value={v.anterior}
+                      onChange={(e) => set(f.dpto, "anterior", e.target.value)}
+                      className="campo num bg-slate-50"
+                    />
+                  )}
                 </div>
                 <div className="w-1/2">
                   <label className="etiqueta" htmlFor={`actual_${f.dpto}`}>

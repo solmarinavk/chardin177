@@ -54,14 +54,22 @@ export default async function LecturasPage() {
 
   const porDpto = new Map(lecturas.map((l) => [l.dpto_id, l]));
 
+  // ¿Hay mes previo para este dpto? Entonces la lectura anterior se trae sola y
+  // queda de solo lectura (matriz, regla 1). El primer mes es la excepción.
+  const hayHistorial = anteriores.size > 0;
+
   const filas: FilaLectura[] = await Promise.all(
     departamentos.map(async (d) => {
       const existente = porDpto.get(d.id);
+      const bloqueada = anteriores.has(d.id);
       return {
         dpto: d.id,
-        anterior: existente?.lectura_anterior ?? anteriores.get(d.id) ?? 0,
+        anterior: bloqueada
+          ? (anteriores.get(d.id) as number)
+          : (existente?.lectura_anterior ?? 0),
         actual: existente?.lectura_actual ?? null,
         promedio: promedios.get(d.id) ?? null,
+        bloqueada,
         fotoUrl: existente?.foto_url
           ? await urlFirmada(BUCKET_MEDIDORES, existente.foto_url)
           : null,
@@ -76,8 +84,10 @@ export default async function LecturasPage() {
           Lecturas de agua
         </h1>
         <p className="mt-1 text-slate-600">
-          {etiquetaPeriodo(borrador.anio, borrador.mes)} · Copia el número que
-          marca cada medidor. La lectura anterior ya está puesta.
+          {etiquetaPeriodo(borrador.anio, borrador.mes)} ·{" "}
+          {hayHistorial
+            ? "Solo escribe la lectura ACTUAL de cada medidor. La anterior se trae sola del mes pasado."
+            : "Primer mes: escribe la lectura anterior (la que marca hoy el medidor como punto de partida) y la actual."}
         </p>
       </div>
 
