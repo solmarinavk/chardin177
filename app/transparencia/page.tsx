@@ -25,7 +25,14 @@ import {
 
 // Página PÚBLICA (sin login). Se comparte por WhatsApp con los vecinos.
 // Solo lectura: los datos vienen del cliente anónimo (RLS `pub_*`).
+//
+// SIEMPRE EN VIVO: el edificio y los pagos deben reflejar la cobranza casi en
+// tiempo real. Cinturón y tirantes contra toda capa de caché (Next llegó a
+// servirla congelada en Netlify): render dinámico + cero caché de fetch +
+// cero revalidación; el middleware además manda no-store a la CDN.
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
+export const fetchCache = "force-no-store";
 
 export const metadata: Metadata = {
   title: "Las cuentas del edificio · Chardin 177",

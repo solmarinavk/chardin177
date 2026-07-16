@@ -52,5 +52,15 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  // La página pública muestra pagos EN VIVO (es el corazón de la cobranza):
+  // prohibimos toda caché de su HTML, incluida la CDN de Netlify, que llegó a
+  // servirla congelada con los datos del deploy. `Netlify-CDN-Cache-Control`
+  // es la cabecera que la CDN de Netlify respeta por encima de todo.
+  if (path === "/transparencia" || path.startsWith("/transparencia/")) {
+    supabaseResponse.headers.set("Cache-Control", "no-store, must-revalidate");
+    supabaseResponse.headers.set("CDN-Cache-Control", "no-store");
+    supabaseResponse.headers.set("Netlify-CDN-Cache-Control", "no-store");
+  }
+
   return supabaseResponse;
 }

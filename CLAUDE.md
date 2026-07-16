@@ -61,6 +61,7 @@ CLAUDE.md               este archivo
 4. Funciona en viewport móvil de 380px.
 5. Toda escritura sensible genera fila en `audit_log`.
 6. Deploy preview de Netlify funcionando.
+7. **Las vistas públicas sirven datos EN VIVO** (sin caché congelada): tras registrar un pago, `/transparencia` y el export público lo muestran en el siguiente refresh. Todo lo público lleva `no-store` en todas las capas (segmento `force-dynamic` + `fetchCache`, fetch del cliente anon, y cabeceras `Cache-Control`/`CDN-Cache-Control`/`Netlify-CDN-Cache-Control` desde el middleware) — la CDN de Netlify llegó a servir la página congelada con los datos del deploy.
 
 ## Qué NO hacer
 

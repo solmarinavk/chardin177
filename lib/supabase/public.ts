@@ -16,6 +16,14 @@ export function createPublicClient() {
   return createClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    { auth: { autoRefreshToken: false, persistSession: false } },
+    {
+      auth: { autoRefreshToken: false, persistSession: false },
+      global: {
+        // Los datos públicos se muestran EN VIVO: ninguna consulta de este
+        // cliente puede quedar cacheada por el fetch de Next (la página
+        // llegó a servirse congelada con los datos del deploy).
+        fetch: (input, init) => fetch(input, { ...init, cache: "no-store" }),
+      },
+    },
   );
 }
