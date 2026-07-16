@@ -199,6 +199,36 @@ export default async function CajaPage({
         </section>
       )}
 
+      {/* ——— Registrar mantenimiento / incidencia (3.6) ——— */}
+      {gestiona && periodoEgresoDestino && (
+        <section className="card animar-aparecer p-5">
+          <details className="group">
+            <summary className="flex cursor-pointer list-none items-center gap-2 font-bold text-slate-900">
+              <IconoFlecha className="h-4 w-4 transition-transform group-open:rotate-90" />
+              Registrar mantenimiento / incidencia
+            </summary>
+            <p className="mt-2 text-sm text-slate-600">
+              El vecino avisa del problema (ascensor, filtración, etc.) por el
+              WhatsApp del edificio y aquí se registra como egreso con su
+              categoría. Entra a la caja del mes y se ve en el dashboard con su
+              comprobante.
+            </p>
+            <div className="mt-3">
+              <FormEgreso
+                accion={crearEgreso}
+                periodoId={periodoEgresoDestino.id}
+                categorias={categorias}
+                fechaHoy={hoyLima()}
+                categoriaDefault={
+                  categorias.find((c) => c.nombre === "Reparaciones")?.id
+                }
+                conceptoPlaceholder="Ej. Reparación de bomba de agua, cambio de foco…"
+              />
+            </div>
+          </details>
+        </section>
+      )}
+
       {/* ——— Lista de egresos filtrable (2.1) ——— */}
       <section className="card animar-aparecer p-5">
         <h2 className="titulo-seccion mb-3">Egresos</h2>

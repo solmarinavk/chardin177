@@ -13,11 +13,15 @@ export function FormEgreso({
   periodoId,
   categorias,
   fechaHoy,
+  categoriaDefault,
+  conceptoPlaceholder = "Ej. Sueldo vigilante, recibo Sedapal…",
 }: {
   accion: Accion;
   periodoId: number;
   categorias: Array<{ id: number; nombre: string }>;
   fechaHoy: string;
+  categoriaDefault?: number;
+  conceptoPlaceholder?: string;
 }) {
   const [estado, formAction] = useFormState(accion, ESTADO_INICIAL);
   return (
@@ -34,7 +38,7 @@ export function FormEgreso({
           required
           maxLength={120}
           className="campo"
-          placeholder="Ej. Sueldo vigilante, recibo Sedapal…"
+          placeholder={conceptoPlaceholder}
         />
       </div>
       <div className="flex gap-3">
@@ -42,7 +46,13 @@ export function FormEgreso({
           <label className="etiqueta" htmlFor="categoria_id">
             Categoría
           </label>
-          <select id="categoria_id" name="categoria_id" className="campo" required>
+          <select
+            id="categoria_id"
+            name="categoria_id"
+            className="campo"
+            required
+            defaultValue={categoriaDefault ?? undefined}
+          >
             {categorias.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.nombre}
