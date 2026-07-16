@@ -84,7 +84,9 @@ export type ItemMenu = {
   activo: boolean;
 };
 
-const TODOS: RolUsuario[] = ["admin", "tesoreria", "porteria", "residente"];
+// Los usuarios con login son solo los roles que ESCRIBEN. Los vecinos ya no
+// tienen cuenta: ven la transparencia en la web pública (/transparencia).
+const TODOS: RolUsuario[] = ["admin", "tesoreria", "porteria"];
 
 export const MENU: ItemMenu[] = [
   {
@@ -108,7 +110,7 @@ export const MENU: ItemMenu[] = [
     etiqueta: "Periodos",
     corta: "Periodos",
     icono: "calendario",
-    roles: ["tesoreria", "admin", "residente"],
+    roles: ["tesoreria", "admin"],
     activo: true,
   },
   {
@@ -116,7 +118,7 @@ export const MENU: ItemMenu[] = [
     etiqueta: "Estado de cuenta",
     corta: "Cuenta",
     icono: "cuenta",
-    roles: ["residente", "tesoreria", "admin"],
+    roles: ["tesoreria", "admin"],
     activo: true,
   },
   {
@@ -124,7 +126,7 @@ export const MENU: ItemMenu[] = [
     etiqueta: "Caja y egresos",
     corta: "Caja",
     icono: "recibo",
-    roles: ["tesoreria", "admin", "residente"],
+    roles: ["tesoreria", "admin"],
     activo: true,
   },
   {

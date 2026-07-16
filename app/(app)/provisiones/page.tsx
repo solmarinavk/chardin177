@@ -14,7 +14,7 @@ import { configurarProvision, registrarMovimientoProvision } from "./acciones";
 export const metadata: Metadata = { title: "Provisiones" };
 
 export default async function ProvisionesPage() {
-  const perfil = await requireRol(["tesoreria", "admin", "residente"]);
+  const perfil = await requireRol(["tesoreria", "admin"]);
   const esAdmin = perfil.rol === "admin";
   const gestiona = perfil.rol === "tesoreria" || perfil.rol === "admin";
 

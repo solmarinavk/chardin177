@@ -65,8 +65,9 @@ export default async function PeriodoDetallePage({
   if (!Number.isInteger(id)) notFound();
 
   // Portería solo usa el módulo de lecturas (PROPUESTA §5); los datos
-  // financieros del periodo son para tesorería, admin y residentes.
-  const perfil = await requireRol(["tesoreria", "admin", "residente"]);
+  // financieros del periodo son para tesorería y admin. Los vecinos ven el
+  // resumen del mes en la web pública (/transparencia).
+  const perfil = await requireRol(["tesoreria", "admin"]);
 
   const periodo = await getPeriodo(id);
   if (!periodo) notFound();
@@ -251,11 +252,6 @@ export default async function PeriodoDetallePage({
             </section>
           )}
 
-          {!gestiona && perfil.rol === "residente" && (
-            <p className="animar-aparecer text-center text-slate-500">
-              Este mes está en preparación. Cuando se emita verás tu cuota aquí.
-            </p>
-          )}
         </>
       )}
 

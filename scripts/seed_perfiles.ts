@@ -35,7 +35,9 @@ type UsuarioSeed = {
   rol: RolUsuario;
 };
 
-// Los 4 usuarios fijos. Cambia los correos si creaste otros.
+// Los 3 usuarios que ESCRIBEN (con login). Los vecinos ya no tienen cuenta:
+// ven la transparencia en la web pública /transparencia. Cambia los correos
+// si creaste otros.
 const USUARIOS: UsuarioSeed[] = [
   {
     email: process.env.SEED_ADMIN_EMAIL ?? "admin@chardin177.pe",
@@ -51,11 +53,6 @@ const USUARIOS: UsuarioSeed[] = [
     email: process.env.SEED_PORTERIA_EMAIL ?? "porteria@chardin177.pe",
     nombre: "Portería",
     rol: "porteria",
-  },
-  {
-    email: process.env.SEED_VECINOS_EMAIL ?? "vecinos@chardin177.pe",
-    nombre: "Vecinos (cuenta compartida)",
-    rol: "residente",
   },
 ];
 

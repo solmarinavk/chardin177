@@ -1,33 +1,23 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { requireRol } from "@/lib/roles";
-import { getEstadosDeCuenta, getDepartamentos } from "@/lib/periodos";
+import { getEstadosDeCuenta } from "@/lib/periodos";
 import { getDeudasPorDpto } from "@/lib/caja";
-import { getPeriodoEmitido } from "@/lib/constancias";
 import { etiquetaPeriodo, mesesDesde, textoAntiguedad } from "@/lib/fechas";
 import { formatoPEN } from "@/lib/centimos";
 import { IconoCheck, IconoFlecha, IconoAlerta } from "@/components/iconos";
-import { FormSubirConstancia } from "@/components/forms/constancia";
-import { subirConstancia } from "@/app/(app)/constancias/acciones";
 
 export const metadata: Metadata = { title: "Estado de cuenta" };
 
 export default async function EstadoCuentaPage() {
-  // Portería solo usa lecturas (PROPUESTA §5).
-  const perfil = await requireRol(["tesoreria", "admin", "residente"]);
+  // Solo tesorería y admin (portería usa lecturas; los vecinos ven el estado
+  // de cuenta de cada dpto en la web pública /transparencia).
+  await requireRol(["tesoreria", "admin"]);
 
-  const [todos, deudas, periodoEmitido, departamentos] = await Promise.all([
+  const [filas, deudasVisibles] = await Promise.all([
     getEstadosDeCuenta(),
     getDeudasPorDpto(),
-    getPeriodoEmitido(),
-    getDepartamentos(),
   ]);
-  // Si el perfil está asociado a un dpto, muestra solo el suyo; si no
-  // (cuenta compartida de vecinos), muestra todos (transparencia).
-  const filas =
-    perfil.dpto_id != null ? todos.filter((f) => f.dpto === perfil.dpto_id) : todos;
-  const deudasVisibles =
-    perfil.dpto_id != null ? deudas.filter((d) => d.dpto === perfil.dpto_id) : deudas;
 
   const totCargos = filas.reduce((a, f) => a + f.cargos, 0);
   const totAbonos = filas.reduce((a, f) => a + f.abonos, 0);
@@ -43,30 +33,6 @@ export default async function EstadoCuentaPage() {
           Cargos (cuotas emitidas) contra abonos (pagos) por departamento.
         </p>
       </div>
-
-      {/* 3.7 · El vecino sube su constancia de pago (opcional) */}
-      {perfil.rol === "residente" && periodoEmitido && (
-        <section className="card animar-aparecer p-5">
-          <details className="group">
-            <summary className="flex cursor-pointer list-none items-center gap-2 font-bold text-slate-900">
-              <IconoFlecha className="h-4 w-4 transition-transform group-open:rotate-90" />
-              Subir mi constancia de pago ({etiquetaPeriodo(periodoEmitido.anio, periodoEmitido.mes)})
-            </summary>
-            <p className="mt-2 text-sm text-slate-600">
-              Si ya pagaste por Yape o transferencia, sube la foto aquí. Tesorería
-              la confirmará; tu pago cuenta como oficial cuando ellos lo validen.
-            </p>
-            <div className="mt-3">
-              <FormSubirConstancia
-                accion={subirConstancia}
-                periodoId={periodoEmitido.id}
-                dptos={departamentos.map((d) => d.id)}
-                dptoFijo={perfil.dpto_id}
-              />
-            </div>
-          </details>
-        </section>
-      )}
 
       {filas.length === 0 ? (
         <section className="card animar-aparecer p-6 text-center">

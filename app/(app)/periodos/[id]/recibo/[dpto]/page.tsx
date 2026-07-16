@@ -16,7 +16,7 @@ export default async function ReciboPage({
 }: {
   params: { id: string; dpto: string };
 }) {
-  await requireRol(["tesoreria", "admin", "residente"]);
+  await requireRol(["tesoreria", "admin"]);
   const id = Number(params.id);
   const dptoId = Number(params.dpto);
   if (!Number.isInteger(id) || !Number.isInteger(dptoId)) notFound();

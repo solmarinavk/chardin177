@@ -2,21 +2,12 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { getPerfil, ETIQUETA_ROL, menuPara, rolEsRedundante } from "@/lib/roles";
 import { getPeriodoActual, getResumenPeriodo } from "@/lib/periodos";
-import {
-  getPeriodoAbierto,
-  getLibroCaja,
-  getEgresos,
-  getConsumo6Meses,
-  getSaldosProvisiones,
-} from "@/lib/caja";
 import { pasosDelMes, pasoActual } from "@/lib/flujo";
 import { etiquetaPeriodo, formatoFecha, hoyLima } from "@/lib/fechas";
 import { formatoPEN } from "@/lib/centimos";
-import { BUCKET_COMPROBANTES, urlFirmada } from "@/lib/storage";
 import { Progreso } from "@/components/Progreso";
 import { SemaforoMini } from "@/components/Semaforo";
-import { ConsumoAgua } from "@/components/ConsumoAgua";
-import { EstadoPeriodoBadge, EstadoCuotaBadge } from "@/components/estados";
+import { EstadoPeriodoBadge } from "@/components/estados";
 import { ICONOS, IconoFlecha, IconoGota } from "@/components/iconos";
 
 export const metadata: Metadata = { title: "Inicio" };
@@ -195,16 +186,31 @@ export default async function InicioPage() {
         </section>
       )}
 
-      {/* ——— Residentes: transparencia primero ——— */}
-      {resumen && perfil.rol === "residente" && (
-        <ResidenteInicio
-          resumen={resumen}
-          dptoId={perfil.dpto_id}
-        />
-      )}
-
-      {/* ——— Dashboard de transparencia (2.4): caja, gastos, agua, provisiones ——— */}
-      {periodo && perfil.rol !== "porteria" && <Transparencia />}
+      {/* ——— Transparencia pública: el enlace para compartir por WhatsApp ——— */}
+      <section
+        className="card animar-aparecer p-5"
+        style={{ animationDelay: "40ms" }}
+      >
+        <div className="flex items-start gap-3">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-xl">
+            🔎
+          </span>
+          <div className="min-w-0">
+            <h2 className="text-lg font-bold text-slate-900">
+              Transparencia del edificio
+            </h2>
+            <p className="mt-1 text-sm text-slate-600">
+              La caja, los gastos, el consumo de agua y quién pagó están en una
+              página <span className="font-semibold">pública</span>. Comparte el
+              enlace con los vecinos por WhatsApp.
+            </p>
+          </div>
+        </div>
+        <Link href="/transparencia" className="btn-secondary mt-4 w-full">
+          Ver la página pública
+          <IconoFlecha className="h-4 w-4" />
+        </Link>
+      </section>
 
       {/* ——— Accesos rápidos ——— */}
       <section
@@ -232,221 +238,5 @@ export default async function InicioPage() {
           })}
       </section>
     </main>
-  );
-}
-
-// Dashboard de transparencia (2.4): saldo de caja en vivo, últimos gastos con
-// comprobante, consumo de agua de 6 meses y provisiones.
-async function Transparencia() {
-  const abierto = await getPeriodoAbierto();
-  const [libro, consumos, provisiones] = await Promise.all([
-    abierto ? getLibroCaja(abierto) : Promise.resolve(null),
-    getConsumo6Meses(),
-    getSaldosProvisiones(),
-  ]);
-  const ultimosEgresos = (await getEgresos({})).slice(0, 5);
-
-  const urls = new Map<number, string>();
-  for (const e of ultimosEgresos) {
-    if (e.comprobante_url) {
-      const url = await urlFirmada(BUCKET_COMPROBANTES, e.comprobante_url);
-      if (url) urls.set(e.id, url);
-    }
-  }
-
-  const totalProvisiones = provisiones.reduce((a, p) => a + p.saldoCent, 0);
-
-  return (
-    <>
-      {libro && (
-        <section
-          className="card animar-aparecer p-5"
-          style={{ animationDelay: "40ms" }}
-        >
-          <div className="flex items-center justify-between gap-2">
-            <div>
-              <h2 className="titulo-seccion">Caja del edificio</h2>
-              <p className="num mt-1 text-3xl font-black text-slate-900">
-                {formatoPEN(libro.saldoActualCent)}
-              </p>
-              <p className="text-xs text-slate-500">
-                {etiquetaPeriodo(libro.periodo.anio, libro.periodo.mes)} · saldo en
-                vivo
-              </p>
-            </div>
-            <Link
-              href="/caja"
-              className="btn-secondary min-h-[40px] shrink-0 px-3 py-2 text-sm"
-            >
-              Ver caja
-              <IconoFlecha className="h-4 w-4" />
-            </Link>
-          </div>
-          {totalProvisiones !== 0 && (
-            <p className="num mt-3 rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-600">
-              Provisiones apartadas (vigilante):{" "}
-              <span className="font-bold text-slate-900">
-                {formatoPEN(totalProvisiones)}
-              </span>{" "}
-              · disponible real:{" "}
-              <span className="font-bold text-slate-900">
-                {formatoPEN(libro.saldoActualCent - totalProvisiones)}
-              </span>
-            </p>
-          )}
-        </section>
-      )}
-
-      {ultimosEgresos.length > 0 && (
-        <section
-          className="card animar-aparecer p-5"
-          style={{ animationDelay: "60ms" }}
-        >
-          <h2 className="titulo-seccion mb-3">Últimos gastos</h2>
-          <ul className="flex flex-col gap-2">
-            {ultimosEgresos.map((e) => (
-              <li
-                key={e.id}
-                className="flex items-baseline justify-between gap-3 text-sm"
-              >
-                <span className="min-w-0">
-                  <span className="font-medium text-slate-800">{e.concepto}</span>{" "}
-                  <span className="num text-xs text-slate-400">
-                    {formatoFecha(e.fecha)}
-                  </span>
-                  {urls.has(e.id) && (
-                    <>
-                      {" "}
-                      <a
-                        href={urls.get(e.id)}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-xs font-semibold text-slate-500 underline underline-offset-2 hover:text-slate-900"
-                      >
-                        comprobante
-                      </a>
-                    </>
-                  )}
-                </span>
-                <span className="num shrink-0 font-bold text-slate-900">
-                  {formatoPEN(e.monto_cent)}
-                </span>
-              </li>
-            ))}
-          </ul>
-          <Link
-            href="/caja"
-            className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-slate-600 hover:text-slate-900"
-          >
-            Ver todos los egresos
-            <IconoFlecha className="h-4 w-4" />
-          </Link>
-        </section>
-      )}
-
-      {consumos.length > 0 && (
-        <section
-          className="card animar-aparecer p-5"
-          style={{ animationDelay: "80ms" }}
-        >
-          <h2 className="titulo-seccion mb-3">Consumo de agua por departamento</h2>
-          <ConsumoAgua consumos={consumos} />
-        </section>
-      )}
-    </>
-  );
-}
-
-// Vista de inicio para residentes: su cuota (si su cuenta tiene dpto) o el
-// estado general del edificio (cuenta compartida de vecinos).
-function ResidenteInicio({
-  resumen,
-  dptoId,
-}: {
-  resumen: NonNullable<Awaited<ReturnType<typeof getResumenPeriodo>>>;
-  dptoId: number | null;
-}) {
-  const { periodo, cuotas, pagadoPorCuota } = resumen;
-  const enPreparacion = periodo.estado === "borrador";
-  const miCuota = dptoId != null ? cuotas.find((c) => c.dpto_id === dptoId) : undefined;
-
-  return (
-    <section className="card animar-aparecer p-5">
-      <div className="flex items-center justify-between gap-2">
-        <h2 className="text-lg font-bold text-slate-900">
-          {etiquetaPeriodo(periodo.anio, periodo.mes)}
-        </h2>
-        <EstadoPeriodoBadge estado={periodo.estado} />
-      </div>
-
-      {enPreparacion ? (
-        <p className="mt-3 text-slate-600">
-          El mes está en preparación. Cuando tesorería lo emita, aquí verás tu
-          cuota y quién ya pagó.
-        </p>
-      ) : (
-        <>
-          {miCuota && (
-            <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-sm text-slate-600">
-                  Tu cuota (Dpto {miCuota.dpto_id})
-                </p>
-                <EstadoCuotaBadge estado={miCuota.estado} />
-              </div>
-              <p className="num mt-1 text-3xl font-black text-slate-900">
-                {formatoPEN(miCuota.total_cent)}
-              </p>
-              {miCuota.estado !== "pagado" && (
-                <p className="mt-1 text-sm text-slate-500">
-                  Pagado hasta ahora:{" "}
-                  <span className="num font-semibold">
-                    {formatoPEN(pagadoPorCuota.get(miCuota.id) ?? 0)}
-                  </span>
-                </p>
-              )}
-              <Link
-                href={`/periodos/${periodo.id}/recibo/${miCuota.dpto_id}`}
-                className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-slate-700 hover:text-slate-900"
-              >
-                Ver / compartir mi recibo
-                <IconoFlecha className="h-4 w-4" />
-              </Link>
-            </div>
-          )}
-
-          <div className="mt-4">
-            <p className="titulo-seccion mb-2">Quién pagó este mes</p>
-            <SemaforoMini cuotas={cuotas} />
-          </div>
-
-          <div className="mt-4 flex items-baseline justify-between text-sm">
-            <span className="text-slate-600">Recaudado del edificio</span>
-            <span className="num font-bold text-slate-900">
-              {formatoPEN(resumen.recaudadoCent)}
-              <span className="font-normal text-slate-400">
-                {" "}
-                de {formatoPEN(resumen.esperadoCent)}
-              </span>
-            </span>
-          </div>
-          <div className="mt-2">
-            <Progreso
-              valor={resumen.recaudadoCent}
-              max={resumen.esperadoCent}
-              etiqueta="Recaudación del mes"
-            />
-          </div>
-
-          <Link
-            href={`/periodos/${periodo.id}`}
-            className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-slate-600 hover:text-slate-900"
-          >
-            Ver el detalle del mes
-            <IconoFlecha className="h-4 w-4" />
-          </Link>
-        </>
-      )}
-    </section>
   );
 }

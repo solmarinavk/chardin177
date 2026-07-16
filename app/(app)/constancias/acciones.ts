@@ -9,11 +9,6 @@ import {
   enteroDesdeInput,
   type EstadoForm,
 } from "@/lib/formularios";
-import {
-  BUCKET_COMPROBANTES,
-  archivoConContenido,
-  subirFoto,
-} from "@/lib/storage";
 import type { MedioPago } from "@/lib/database.types";
 
 function mensajeError(error: { code?: string; message: string }): string {
@@ -21,67 +16,10 @@ function mensajeError(error: { code?: string; message: string }): string {
   return error.message;
 }
 
-// 3.7 · El vecino sube su constancia de pago (queda pendiente de confirmar).
-export async function subirConstancia(
-  _prev: EstadoForm,
-  formData: FormData,
-): Promise<EstadoForm> {
-  const perfil = await requireRol(["residente", "tesoreria", "admin"]);
-  const periodoId = enteroDesdeInput(formData.get("periodo_id"));
-  let dptoId = enteroDesdeInput(formData.get("dpto_id"));
-  const monto = centimosDesdeInput(formData.get("monto")); // opcional
-  const nota = String(formData.get("nota") ?? "").trim() || null;
-
-  // Si el perfil está atado a un dpto, ese manda (no puede subir por otro).
-  if (perfil.dpto_id != null) dptoId = perfil.dpto_id;
-
-  if (periodoId === null) return { ok: false, error: "Periodo inválido." };
-  if (dptoId === null)
-    return { ok: false, error: "Elige tu departamento." };
-
-  const s = createClient();
-  const {
-    data: { user },
-  } = await s.auth.getUser();
-
-  let foto_url: string | undefined;
-  const archivo = archivoConContenido(formData.get("foto"));
-  if (archivo) {
-    const res = await subirFoto(
-      BUCKET_COMPROBANTES,
-      `constancia-periodo-${periodoId}-dpto-${dptoId}`,
-      archivo,
-    );
-    if ("error" in res)
-      return { ok: false, error: `No se pudo subir la foto: ${res.error}` };
-    foto_url = res.ruta;
-  }
-
-  if (!foto_url && monto === null)
-    return {
-      ok: false,
-      error: "Sube la foto de tu constancia o al menos indica el monto.",
-    };
-
-  const { error } = await s.from("constancias_pago").insert({
-    periodo_id: periodoId,
-    dpto_id: dptoId,
-    monto_cent: monto,
-    nota,
-    creado_por: user?.id ?? null,
-    ...(foto_url ? { foto_url } : {}),
-  });
-  if (error) return { ok: false, error: mensajeError(error) };
-
-  revalidatePath("/estado-cuenta");
-  return {
-    ok: true,
-    error: null,
-    mensaje: "Constancia enviada. Tesorería la confirmará pronto.",
-  };
-}
-
 // 3.7 · Tesorería confirma una constancia → crea el pago oficial.
+// (Los vecinos ya no suben constancias por sí mismos: envían su comprobante por
+// WhatsApp y tesorería registra el pago directamente en Cobranza. Esta acción
+// sigue disponible para resolver constancias que existieran de antes.)
 export async function confirmarConstancia(
   _prev: EstadoForm,
   formData: FormData,

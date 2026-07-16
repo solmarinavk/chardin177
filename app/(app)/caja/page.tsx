@@ -28,7 +28,7 @@ export default async function CajaPage({
 }: {
   searchParams: { periodo?: string; categoria?: string };
 }) {
-  const perfil = await requireRol(["tesoreria", "admin", "residente"]);
+  const perfil = await requireRol(["tesoreria", "admin"]);
   const gestiona = perfil.rol === "tesoreria" || perfil.rol === "admin";
 
   const [abierto, periodos, categorias, cierres] = await Promise.all([

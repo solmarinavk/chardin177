@@ -13,7 +13,7 @@ export const metadata: Metadata = { title: "Periodos" };
 
 export default async function PeriodosPage() {
   // Portería solo usa lecturas (PROPUESTA §5).
-  const perfil = await requireRol(["tesoreria", "admin", "residente"]);
+  const perfil = await requireRol(["tesoreria", "admin"]);
   const puedeGestionar = perfil.rol === "tesoreria" || perfil.rol === "admin";
 
   const [periodos, borrador] = await Promise.all([listPeriodos(), getBorrador()]);
