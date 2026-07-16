@@ -79,16 +79,16 @@ escriben**: administración, tesorería y portería. Ver `docs/MATRIZ_ROLES.md`.
 
 ## FASE 4 · Historia y blindaje (2 a 3 sesiones)
 
-- [ ] 4.1 Migración histórica (`scripts/migrar_excel.ts`): importar el Excel `Chardin_177_Historico.xlsx` (formato tabla larga, ya auditado y validado), leído vía **service role key solo en local**. Cargar la hoja `Cuotas` (una fila por depto por mes, feb-2024 a jul-2026) como periodos en estado `cerrado` con sus cuotas por depto, y la hoja `Caja` como los saldos mensuales arrastrados. **Se carga tal cual, sin recalcular con el motor** (los datos ya están validados). El script valida que los saldos cuadran y que el **saldo final del último mes histórico (jul-2026) empalma sin saltos** con el saldo inicial del primer periodo operativo de la plataforma; aborta si no cuadra. Guardar además el Excel histórico como **documento descargable** en el módulo Documentos.
-- [ ] 4.2 Bitácora visible: página de auditoría (admin) con filtros por tabla, usuario y fecha.
-- [ ] 4.3 Backup: GitHub Action semanal que exporta las tablas a CSV en el repo (rama `backups`).
-- [ ] 4.4 Manual de usuario embebido: página /ayuda con el flujo mensual paso a paso con capturas.
-- [ ] 4.5 Traspaso de cargo: pantalla de admin para reasignar roles con confirmación y registro en bitácora.
-- [ ] 4.6 Exportador a Excel: botón **"Descargar Excel"** en cada módulo (pagos, egresos, estado de cuenta, caja) que exporta lo que se ve, más una pantalla de **"Exportación total"** con filtros por periodo, rango de meses, dpto y tipo de dato, generando un `.xlsx` con **una hoja por tipo de dato y montos en soles**. Generación **del lado servidor** con `exceljs` o `SheetJS`. Permisos: **admin y tesorería exportan todo** (respetando RLS). _(La cláusula "residente exporta solo su estado de cuenta" quedó obsoleta: el público ya ve todos los estados de cuenta en la web `/transparencia`.)_
+- [x] 4.1 Migración histórica (`scripts/migrar_excel.ts`): lee el Excel auditado y genera un `.sql` (volcado fiel, sin recalcular con el motor) con periodos `cerrado`, cuotas por depto y saldos arrastrados; valida céntimos y el empalme sin saltos (aborta si no cuadra). Módulo **Documentos** para guardar el Excel. _(Lógica en `lib/migracion.ts` con tests; SQL probado en pglite. Pasos en `docs/MIGRACION_HISTORICA.md`. Tú corres el `.sql` que genera.)_
+- [x] 4.2 Bitácora visible: página `/bitacora` (admin) con filtros por módulo, acción y fecha, resumen legible y detalle antes/después. Solo lectura (RLS `sel_audit`).
+- [x] 4.3 Backup: `scripts/backup_csv.ts` + Action `.github/workflows/backup.yml` semanal que vuelca las tablas a CSV en la rama `backups`. _(Requiere secrets `SUPABASE_URL` y `SUPABASE_SERVICE_ROLE_KEY` en GitHub.)_
+- [x] 4.4 Manual de usuario embebido: página `/ayuda` con el flujo mensual en 6 pasos y temas desplegables, en español simple.
+- [x] 4.5 Traspaso de cargo: pantalla `/usuarios` (admin) para reasignar roles con confirmación (queda en bitácora) y gestionar el padrón de residentes. Salvaguarda: no se puede quitar el último admin.
+- [x] 4.6 Exportador a Excel: botón **"Descargar Excel"** en caja, estado de cuenta y periodo, más `/exportar` (exportación total) con filtros; `.xlsx` del lado servidor con `exceljs`, una hoja por tipo de dato y montos en soles. Solo admin/tesorería, respetando RLS.
 
 ## Backlog (ideas futuras, no bloquean nada)
 
-- [ ] **Definir cuotas fijas desde la UI** (rol admin): pantalla para versionar vigilancia, mantenimiento, materiales y agua común (hoy vienen sembradas en `schema.sql`; RLS ya lo restringe a admin). Sin UI, cambiarlas requiere SQL. _(Brecha detectada en la auditoría de la matriz; decidir su fase.)_
+- [x] **Definir cuotas fijas desde la UI** (rol admin): pantalla `/cuotas-fijas` para versionar vigilancia, mantenimiento, materiales y agua común. Cada cambio crea una versión nueva (`vigente_desde`); el motor toma la vigente de cada periodo. Construida junto a la Fase 4.
 - [ ] Modo offline para la PWA (service worker con caché del último estado)
 - [ ] Decidir en junta si portería debe poder LEER datos financieros vía API (hoy el schema da lectura a todo autenticado; la UI ya se lo oculta). _Nota: el lado **público** ya está acotado por la migración `0008` (el rol `anon` solo lee las tablas de transparencia); esto es solo sobre el usuario autenticado portería._ Ver "Nota de seguridad" en `docs/MATRIZ_ROLES.md`.
 - [ ] PIN de acceso rápido para portería
