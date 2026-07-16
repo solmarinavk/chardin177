@@ -151,7 +151,7 @@ export const MENU: ItemMenu[] = [
     corta: "Admin",
     icono: "engranaje",
     roles: ["admin"],
-    activo: false,
+    activo: true,
   },
   {
     href: "/ayuda",

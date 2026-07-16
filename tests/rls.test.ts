@@ -331,6 +331,33 @@ describe("RLS por rol (flujo real del mes)", () => {
     await actuarComoServidor(db);
   });
 
+  it("cuotas fijas: solo admin las versiona; tesorería NO; queda en la bitácora (CF)", async () => {
+    // Admin crea una versión nueva → OK.
+    await actuarComo(db, UID.admin);
+    const ins = await db.query<{ id: number }>(
+      `insert into cuotas_fijas (vigente_desde, vigilancia_total_cent, manto_total_cent, materiales_dpto_cent, agua_comun_dpto_cent)
+       values ('2026-08-01', 210000, 140000, 2000, 1500) returning id`,
+    );
+    expect(ins.rows[0]!.id).toBeGreaterThan(0);
+    await actuarComoServidor(db);
+
+    // Tesorería NO puede versionar cuotas fijas (w_fijas es admin).
+    await actuarComo(db, UID.tesoreria);
+    await expect(
+      db.query(
+        `insert into cuotas_fijas (vigente_desde, vigilancia_total_cent, manto_total_cent, materiales_dpto_cent, agua_comun_dpto_cent)
+         values ('2026-09-01', 1, 1, 1, 1)`,
+      ),
+    ).rejects.toThrow(/row-level security/);
+    await actuarComoServidor(db);
+
+    // La versión del admin quedó registrada en la bitácora.
+    const audit = await db.query<{ n: number }>(
+      `select count(*)::int as n from audit_log where tabla = 'cuotas_fijas' and accion = 'INSERT'`,
+    );
+    expect(audit.rows[0]!.n).toBeGreaterThanOrEqual(1);
+  });
+
   it("la bitácora solo la lee admin (portería ve 0 filas)", async () => {
     await actuarComo(db, UID.porteria);
     const comoPorteria = await db.query<{ n: number }>(
