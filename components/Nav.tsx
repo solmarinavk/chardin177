@@ -20,7 +20,7 @@ export function NavSuperior({ items }: { items: NavItem[] }) {
   const pathname = usePathname();
   return (
     <nav aria-label="Principal" className="hidden sm:block">
-      <ul className="mx-auto flex max-w-3xl gap-1 px-2 pb-2">
+      <ul className="mx-auto flex max-w-3xl flex-wrap gap-1 px-2 pb-2">
         {items.map((item) => {
           const Icono = ICONOS[item.icono] ?? ICONOS.casa!;
           if (!item.activo) {

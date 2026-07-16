@@ -140,6 +140,54 @@ export function IconoSalir(p: Props) {
   );
 }
 
+export function IconoDescarga(p: Props) {
+  return (
+    <Svg {...p}>
+      <path d="M12 3v12" />
+      <path d="m7 12 5 5 5-5" />
+      <path d="M5 21h14" />
+    </Svg>
+  );
+}
+
+export function IconoDocumento(p: Props) {
+  return (
+    <Svg {...p}>
+      <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z" />
+      <path d="M14 3v5h5" />
+      <path d="M9 13h6M9 17h6" />
+    </Svg>
+  );
+}
+
+export function IconoBitacora(p: Props) {
+  return (
+    <Svg {...p}>
+      <path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2Z" />
+      <path d="M9 7h6M9 11h6" />
+    </Svg>
+  );
+}
+
+export function IconoEngranaje(p: Props) {
+  return (
+    <Svg {...p}>
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-2.82 1.17V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 8 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15H4.5a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 6 9.4l-.24-.24a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 12 5.5V4.5a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 2.82 1.17l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 12v.09a1.65 1.65 0 0 0 0 2.82Z" />
+    </Svg>
+  );
+}
+
+export function IconoAyuda(p: Props) {
+  return (
+    <Svg {...p}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.7.3-1 .8-1 1.7" />
+      <path d="M12 17h.01" />
+    </Svg>
+  );
+}
+
 // Mapa por nombre (para pasar iconos de servidor a cliente como string).
 export const ICONOS: Record<string, (p: Props) => React.ReactElement> = {
   casa: IconoCasa,
@@ -149,4 +197,9 @@ export const ICONOS: Record<string, (p: Props) => React.ReactElement> = {
   recibo: IconoRecibo,
   usuarios: IconoUsuarios,
   candado: IconoCandado,
+  descarga: IconoDescarga,
+  documento: IconoDocumento,
+  bitacora: IconoBitacora,
+  engranaje: IconoEngranaje,
+  ayuda: IconoAyuda,
 };

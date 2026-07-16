@@ -5,6 +5,7 @@ import { getEstadosDeCuenta } from "@/lib/periodos";
 import { getDeudasPorDpto } from "@/lib/caja";
 import { etiquetaPeriodo, mesesDesde, textoAntiguedad } from "@/lib/fechas";
 import { formatoPEN } from "@/lib/centimos";
+import { BotonExcel } from "@/components/BotonExcel";
 import { IconoCheck, IconoFlecha, IconoAlerta } from "@/components/iconos";
 
 export const metadata: Metadata = { title: "Estado de cuenta" };
@@ -32,6 +33,9 @@ export default async function EstadoCuentaPage() {
         <p className="mt-1 text-slate-600">
           Cargos (cuotas emitidas) contra abonos (pagos) por departamento.
         </p>
+        <div className="mt-3">
+          <BotonExcel href="/api/exportar?modulo=estado-cuenta" />
+        </div>
       </div>
 
       {filas.length === 0 ? (

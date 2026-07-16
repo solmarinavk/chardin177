@@ -13,6 +13,7 @@ import { etiquetaPeriodo, formatoFecha, hoyLima } from "@/lib/fechas";
 import { formatoPEN } from "@/lib/centimos";
 import { BUCKET_COMPROBANTES, urlFirmada } from "@/lib/storage";
 import { EstadoPeriodoBadge } from "@/components/estados";
+import { BotonExcel } from "@/components/BotonExcel";
 import { IconoCheck, IconoFlecha, IconoReloj } from "@/components/iconos";
 import {
   FormEgreso,
@@ -94,6 +95,7 @@ export default async function CajaPage({
               Conciliación de agua
             </Link>
           )}
+          <BotonExcel href="/api/exportar?modulo=caja" />
         </div>
       </div>
 

@@ -17,6 +17,7 @@ import { etiquetaPeriodo, formatoFecha, hoyLima } from "@/lib/fechas";
 import { formatoPEN } from "@/lib/centimos";
 import { BUCKET_COMPROBANTES, urlFirmada } from "@/lib/storage";
 import { EstadoPeriodoBadge } from "@/components/estados";
+import { BotonExcel } from "@/components/BotonExcel";
 import { CuotasDesglose } from "@/components/CuotasDesglose";
 import { Semaforo } from "@/components/Semaforo";
 import { FlujoMes } from "@/components/FlujoMes";
@@ -108,6 +109,9 @@ export default async function PeriodoDetallePage({
             {etiquetaPeriodo(periodo.anio, periodo.mes)}
           </h1>
           <EstadoPeriodoBadge estado={periodo.estado} />
+          {periodo.estado !== "borrador" && (
+            <BotonExcel href={`/api/exportar?modulo=periodo&periodo=${id}`} />
+          )}
         </div>
       </div>
 
