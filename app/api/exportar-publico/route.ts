@@ -64,7 +64,11 @@ export async function GET(req: NextRequest) {
       "Content-Type":
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       "Content-Disposition": `attachment; filename="${archivo}"`,
+      // Sin caché en ninguna capa (navegador y CDN de Netlify): el archivo
+      // debe salir con los datos del momento.
       "Cache-Control": "no-store",
+      "CDN-Cache-Control": "no-store",
+      "Netlify-CDN-Cache-Control": "no-store",
     },
   });
 }
