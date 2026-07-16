@@ -52,10 +52,14 @@ export type DatosTransparencia = {
   periodos: PeriodoPublico[]; // meses ya emitidos/cerrados, del más nuevo al más viejo
 };
 
-export async function getDatosTransparencia(): Promise<DatosTransparencia> {
+// `periodoId` (5.4e): mes elegido en el selector público; si no viene o no es
+// un mes ya emitido/cerrado, se usa el más reciente.
+export async function getDatosTransparencia(
+  periodoId?: number,
+): Promise<DatosTransparencia> {
   const s = createPublicClient();
 
-  const [abierto, periodoSemaforo, { data: periodosLista }] = await Promise.all([
+  const [abierto, ultimoConCuotas, { data: periodosLista }] = await Promise.all([
     getPeriodoAbierto(s),
     getPeriodoConCuotas(s),
     s
@@ -65,6 +69,16 @@ export async function getDatosTransparencia(): Promise<DatosTransparencia> {
       .order("anio", { ascending: false })
       .order("mes", { ascending: false }),
   ]);
+
+  let periodoSemaforo = ultimoConCuotas;
+  if (periodoId != null && (periodosLista ?? []).some((p) => p.id === periodoId)) {
+    const { data: elegido } = await s
+      .from("periodos")
+      .select("*")
+      .eq("id", periodoId)
+      .maybeSingle();
+    if (elegido) periodoSemaforo = elegido;
+  }
 
   const [libro, provisiones, consumos, egresosRaw, estados, deudas] =
     await Promise.all([

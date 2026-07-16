@@ -8,6 +8,7 @@ import {
   getPagosPorCuota,
   getDepartamentos,
   getDerramas,
+  getRecibosMesAnterior,
   type ResumenPeriodo,
 } from "@/lib/periodos";
 import { getLibroCaja } from "@/lib/caja";
@@ -159,28 +160,13 @@ export default async function PeriodoDetallePage({
 
           {/* Paso 2 · Recibos */}
           {gestiona && (
-            <section
-              id="recibos"
-              className="card animar-aparecer scroll-mt-24 p-5"
-            >
-              <h2 className="titulo-seccion mb-3">Recibos del mes</h2>
-              <div className="flex flex-col gap-4">
-                <FormRecibo
-                  accion={guardarRecibo}
-                  periodoId={id}
-                  tipo="agua"
-                  montoActualCent={resumen.recibos.agua?.monto_cent ?? null}
-                  fotoUrl={fotoAgua}
-                />
-                <FormRecibo
-                  accion={guardarRecibo}
-                  periodoId={id}
-                  tipo="luz"
-                  montoActualCent={resumen.recibos.luz?.monto_cent ?? null}
-                  fotoUrl={fotoLuz}
-                />
-              </div>
-            </section>
+            <RecibosSection
+              periodoId={id}
+              periodo={periodo}
+              resumen={resumen}
+              fotoAgua={fotoAgua}
+              fotoLuz={fotoLuz}
+            />
           )}
 
           {/* Cuota extraordinaria (derrama) */}
@@ -288,7 +274,11 @@ export default async function PeriodoDetallePage({
                 />
               </div>
             </div>
-            <Semaforo cuotas={resumen.cuotas} pagadoPorCuota={resumen.pagadoPorCuota} />
+            <Semaforo
+              cuotas={resumen.cuotas}
+              pagadoPorCuota={resumen.pagadoPorCuota}
+              conCobro={gestiona && periodo.estado === "emitido"}
+            />
           </section>
 
           {/* Registrar pagos */}
@@ -383,6 +373,47 @@ export default async function PeriodoDetallePage({
         </>
       )}
     </main>
+  );
+}
+
+// Paso 2 · Recibos del mes, con el monto del mes anterior como referencia
+// para detectar errores de digitación al vuelo (5.4b).
+async function RecibosSection({
+  periodoId,
+  periodo,
+  resumen,
+  fotoAgua,
+  fotoLuz,
+}: {
+  periodoId: number;
+  periodo: NonNullable<Awaited<ReturnType<typeof getPeriodo>>>;
+  resumen: ResumenPeriodo;
+  fotoAgua: string | null;
+  fotoLuz: string | null;
+}) {
+  const anteriores = await getRecibosMesAnterior(periodo);
+  return (
+    <section id="recibos" className="card animar-aparecer scroll-mt-24 p-5">
+      <h2 className="titulo-seccion mb-3">Recibos del mes</h2>
+      <div className="flex flex-col gap-4">
+        <FormRecibo
+          accion={guardarRecibo}
+          periodoId={periodoId}
+          tipo="agua"
+          montoActualCent={resumen.recibos.agua?.monto_cent ?? null}
+          montoAnteriorCent={anteriores.agua?.monto_cent ?? null}
+          fotoUrl={fotoAgua}
+        />
+        <FormRecibo
+          accion={guardarRecibo}
+          periodoId={periodoId}
+          tipo="luz"
+          montoActualCent={resumen.recibos.luz?.monto_cent ?? null}
+          montoAnteriorCent={anteriores.luz?.monto_cent ?? null}
+          fotoUrl={fotoLuz}
+        />
+      </div>
+    </section>
   );
 }
 

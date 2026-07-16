@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useFormState } from "react-dom";
 import { BotonEnviar } from "@/components/BotonEnviar";
 import { CampoFoto } from "@/components/forms/CampoFoto";
@@ -16,6 +17,10 @@ const MEDIOS = [
   { valor: "otro", texto: "Otro" },
 ];
 
+// 5.4d · El medio de pago recuerda el último usado en este dispositivo (los
+// vecinos casi siempre pagan por el mismo canal).
+const CLAVE_MEDIO = "chardin_ultimo_medio";
+
 export function FormPago({
   accion,
   periodoId,
@@ -30,6 +35,11 @@ export function FormPago({
   fechaHoy: string;
 }) {
   const [estado, formAction] = useFormState(accion, ESTADO_INICIAL);
+  const [medio, setMedio] = useState("transferencia");
+  useEffect(() => {
+    const guardado = window.localStorage.getItem(CLAVE_MEDIO);
+    if (guardado && MEDIOS.some((m) => m.valor === guardado)) setMedio(guardado);
+  }, []);
   return (
     <form
       action={formAction}
@@ -38,7 +48,7 @@ export function FormPago({
       <input type="hidden" name="periodo_id" value={periodoId} />
       <input type="hidden" name="cuota_id" value={cuotaId} />
       <div className="flex gap-3">
-        <div className="flex-1">
+        <div className="min-w-0 flex-1">
           <label className="etiqueta" htmlFor={`monto_${cuotaId}`}>
             Monto (S/)
           </label>
@@ -54,7 +64,7 @@ export function FormPago({
             className="campo num"
           />
         </div>
-        <div className="flex-1">
+        <div className="w-36 shrink-0">
           <label className="etiqueta" htmlFor={`fecha_${cuotaId}`}>
             Fecha
           </label>
@@ -75,7 +85,11 @@ export function FormPago({
         <select
           id={`medio_${cuotaId}`}
           name="medio"
-          defaultValue="transferencia"
+          value={medio}
+          onChange={(e) => {
+            setMedio(e.target.value);
+            window.localStorage.setItem(CLAVE_MEDIO, e.target.value);
+          }}
           className="campo"
         >
           {MEDIOS.map((m) => (

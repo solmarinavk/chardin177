@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useFormState } from "react-dom";
 import { BotonEnviar } from "@/components/BotonEnviar";
 import { CampoFoto } from "@/components/forms/CampoFoto";
@@ -9,6 +9,11 @@ import { IconoCheck, IconoAlerta, IconoCandado } from "@/components/iconos";
 import { ESTADO_INICIAL, type EstadoForm } from "@/lib/formularios";
 
 type Accion = (prev: EstadoForm, fd: FormData) => Promise<EstadoForm>;
+type Autoguardar = (
+  periodoId: number,
+  dpto: number,
+  actual: number,
+) => Promise<{ ok: boolean; error?: string }>;
 
 export type FilaLectura = {
   dpto: number;
@@ -21,10 +26,12 @@ export type FilaLectura = {
 
 export function FormLecturas({
   accion,
+  autoguardar,
   periodoId,
   filas,
 }: {
   accion: Accion;
+  autoguardar?: Autoguardar; // 5.4c: guarda cada lectura al salir del campo
   periodoId: number;
   filas: FilaLectura[];
 }) {
@@ -38,9 +45,42 @@ export function FormLecturas({
         ]),
       ),
   );
+  // Estado del autoguardado por dpto + último valor ya guardado (evita repetir).
+  const [auto, setAuto] = useState<Record<number, "guardando" | "ok">>({});
+  const guardadoRef = useRef<Record<number, number>>(
+    Object.fromEntries(
+      filas.filter((f) => f.actual !== null).map((f) => [f.dpto, f.actual!]),
+    ),
+  );
 
   function set(dpto: number, campo: "anterior" | "actual", v: string) {
     setValores((prev) => ({ ...prev, [dpto]: { ...prev[dpto]!, [campo]: v } }));
+  }
+
+  // 5.4c · Al salir del campo "actual": guarda esa lectura sola, para que un
+  // corte de internet a mitad de la ronda no pierda lo avanzado.
+  function alSalirDelCampo(f: FilaLectura) {
+    if (!autoguardar) return;
+    const v = valores[f.dpto]!;
+    if (v.actual === "") return;
+    const act = Number(v.actual);
+    const ant = Number(v.anterior);
+    if (!Number.isInteger(act) || act < 0) return;
+    if (Number.isFinite(ant) && act < ant) return; // ya se marca en rojo
+    if (guardadoRef.current[f.dpto] === act) return; // sin cambios
+    setAuto((p) => ({ ...p, [f.dpto]: "guardando" }));
+    void autoguardar(periodoId, f.dpto, act).then((r) => {
+      if (r.ok) {
+        guardadoRef.current[f.dpto] = act;
+        setAuto((p) => ({ ...p, [f.dpto]: "ok" }));
+      } else {
+        // Silencioso: el botón Guardar sigue siendo la confirmación final.
+        setAuto((p) => {
+          const { [f.dpto]: _quitar, ...resto } = p;
+          return resto;
+        });
+      }
+    });
   }
 
   function estadoFila(f: FilaLectura) {
@@ -159,8 +199,18 @@ export function FormLecturas({
                     min={0}
                     value={v.actual}
                     onChange={(e) => set(f.dpto, "actual", e.target.value)}
+                    onBlur={() => alSalirDelCampo(f)}
                     className={`campo num ${menor ? "border-red-500 ring-2 ring-red-200" : ""}`}
                   />
+                  {auto[f.dpto] === "guardando" && (
+                    <p className="mt-1 text-xs text-slate-400">Guardando…</p>
+                  )}
+                  {auto[f.dpto] === "ok" && (
+                    <p className="mt-1 flex items-center gap-1 text-xs font-semibold text-emerald-700">
+                      <IconoCheck className="h-3 w-3" />
+                      Guardada
+                    </p>
+                  )}
                 </div>
               </div>
 

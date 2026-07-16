@@ -11,6 +11,8 @@ import {
 import { Edificio } from "@/components/Edificio";
 import { mapaEdificio } from "@/lib/edificio";
 import { TIPOS_DATO, TIPOS_DATO_PUBLICO } from "@/lib/exportar_datos";
+import { SelectorMes } from "@/components/SelectorMes";
+import { CompartirCuentas } from "@/components/CompartirCuentas";
 import { ConsumoAgua } from "@/components/ConsumoAgua";
 import { Progreso } from "@/components/Progreso";
 import {
@@ -30,8 +32,15 @@ export const metadata: Metadata = {
     "La caja, los gastos, el consumo de agua y los pagos del mes del edificio Chardin 177, siempre al día.",
 };
 
-export default async function TransparenciaPage() {
-  const d = await getDatosTransparencia();
+export default async function TransparenciaPage({
+  searchParams,
+}: {
+  searchParams: { mes?: string };
+}) {
+  const mesElegido = Number(searchParams.mes);
+  const d = await getDatosTransparencia(
+    Number.isInteger(mesElegido) ? mesElegido : undefined,
+  );
   const hayAlgo =
     d.libro ||
     d.semaforo ||
@@ -138,17 +147,27 @@ export default async function TransparenciaPage() {
           </section>
         )}
 
-        {/* ——— Semáforo de pagos del mes ——— */}
+        {/* ——— Pagos del mes: el edificio ——— */}
         {d.semaforo && (
           <section className="card animar-aparecer p-5">
-            <div className="flex items-baseline justify-between gap-2">
+            <div className="flex items-center justify-between gap-2">
               <h3 className="titulo-seccion">Quién pagó</h3>
-              <span className="text-xs font-semibold text-slate-500">
-                {etiquetaPeriodo(
-                  d.semaforo.periodo.anio,
-                  d.semaforo.periodo.mes,
-                )}
-              </span>
+              {d.periodos.length > 1 ? (
+                <SelectorMes
+                  opciones={d.periodos.map((p) => ({
+                    id: p.id,
+                    etiqueta: etiquetaPeriodo(p.anio, p.mes),
+                  }))}
+                  actual={d.semaforo.periodo.id}
+                />
+              ) : (
+                <span className="text-xs font-semibold text-slate-500">
+                  {etiquetaPeriodo(
+                    d.semaforo.periodo.anio,
+                    d.semaforo.periodo.mes,
+                  )}
+                </span>
+              )}
             </div>
 
             <div className="mb-4 mt-2">
@@ -177,6 +196,11 @@ export default async function TransparenciaPage() {
             <p className="mt-3 text-center text-xs text-slate-500">
               Toca una ventana para ver el detalle del departamento.
             </p>
+            <div className="mt-4">
+              <CompartirCuentas
+                resumen={`Las cuentas del edificio Chardin 177 — ${etiquetaPeriodo(d.semaforo.periodo.anio, d.semaforo.periodo.mes)}: recaudado ${formatoPEN(d.semaforo.recaudadoCent)} de ${formatoPEN(d.semaforo.esperadoCent)} · ${d.semaforo.cuotas.filter((c) => c.estado === "pagado").length} dptos al día, ${d.semaforo.cuotas.filter((c) => c.estado !== "pagado").length} por pagar.`}
+              />
+            </div>
           </section>
         )}
 

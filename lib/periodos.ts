@@ -139,6 +139,22 @@ export async function getRecibos(periodoId: number): Promise<{
   };
 }
 
+// Recibos del mes ANTERIOR al periodo dado (referencia contra errores de
+// digitación, 5.4b): el periodo previo más cercano por año/mes.
+export async function getRecibosMesAnterior(periodo: Periodo): Promise<{
+  agua: ReciboServicio | null;
+  luz: ReciboServicio | null;
+}> {
+  const s = createClient();
+  const orden = periodo.anio * 12 + periodo.mes;
+  const { data: periodos } = await s.from("periodos").select("id, anio, mes");
+  const previo = (periodos ?? [])
+    .filter((p) => p.anio * 12 + p.mes < orden)
+    .sort((a, b) => b.anio * 12 + b.mes - (a.anio * 12 + a.mes))[0];
+  if (!previo) return { agua: null, luz: null };
+  return getRecibos(previo.id);
+}
+
 // Lectura anterior por dpto = lectura_actual más reciente de un periodo previo
 // (por anio/mes). Si no hay historial, queda en 0 (primer mes).
 export async function getLecturasAnteriores(
