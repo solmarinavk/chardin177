@@ -86,6 +86,16 @@ escriben**: administración, tesorería y portería. Ver `docs/MATRIZ_ROLES.md`.
 - [x] 4.5 Traspaso de cargo: pantalla `/usuarios` (admin) para reasignar roles con confirmación (queda en bitácora) y gestionar el padrón de residentes. Salvaguarda: no se puede quitar el último admin.
 - [x] 4.6 Exportador a Excel: botón **"Descargar Excel"** en caja, estado de cuenta y periodo, más `/exportar` (exportación total) con filtros; `.xlsx` del lado servidor con `exceljs`, una hoja por tipo de dato y montos en soles. Solo admin/tesorería, respetando RLS.
 
+## FASE 5 · Pulido de entrega (UX/UI y flujos)
+
+> Pulido final antes de entregar la plataforma al edificio (jul-2026).
+
+- [ ] 5.1 **Edificio visual**: fachada SVG del Chardin 177 (5 pisos × 2 dptos, puerta, azotea, letrero) donde cada ventana se pinta según el estado de pago del mes (verde/ámbar/rojo) y al tocarla muestra el detalle (pagado/pendiente). Reemplaza al semáforo en la página pública y en el inicio de tesorería/admin (ahí, tocar un dpto pendiente lleva directo a cobrarle). Mobile-first a 380px.
+- [ ] 5.2 **Exportar Excel público** (sin login): botón "Descargar Excel" en la página pública con filtros de rango de meses y tipo de dato. El endpoint usa el **cliente anon**: solo exporta lo que las políticas RLS `pub_*` permiten leer (cuotas, pagos, egresos, caja, consumo). **Nunca** residentes, perfiles, audit_log ni constancias — verificado con test de no-filtración.
+- [ ] 5.3 **Copy neutro** en la página pública: se renombra "Transparencia del edificio" por un título descriptivo sin narrativa de antes/después, y se revisa todo el texto de la página con ese criterio.
+- [ ] 5.4 **Flujos sin fricción** (regla: si el dato ya existe, no se vuelve a pedir): (a) registrar pago en un toque desde el edificio con monto y fecha precargados; (b) el monto del mes anterior como referencia junto a cada recibo; (c) autoguardado de lecturas al salir del campo (el botón queda como confirmación); (d) fecha de pago = hoy y medio de pago recordando el último usado; (e) selector de mes en la página pública para ver meses anteriores; (f) botón "Compartir por WhatsApp" con el resumen del mes.
+- [ ] 5.5 **Revisión general de UX**: recorrido con ojos de usuario nuevo — estados vacíos con guía, textos de botones que dicen qué pasa, confirmaciones solo donde el error es costoso, y lenguaje consistente en toda la app.
+
 ## Backlog (ideas futuras, no bloquean nada)
 
 - [x] **Definir cuotas fijas desde la UI** (rol admin): pantalla `/cuotas-fijas` para versionar vigilancia, mantenimiento, materiales y agua común. Cada cambio crea una versión nueva (`vigente_desde`); el motor toma la vigente de cada periodo. Construida junto a la Fase 4.
