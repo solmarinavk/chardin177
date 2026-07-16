@@ -5,7 +5,8 @@ import type { Database } from "@/lib/database.types";
 type CookieAEscribir = { name: string; value: string; options: CookieOptions };
 
 // Rutas que NO requieren sesión. /api se protege por su cuenta (ej. CRON_SECRET).
-const RUTAS_PUBLICAS = ["/", "/login", "/auth", "/api"];
+// /transparencia es la web pública del edificio (solo lectura, rol anon en RLS).
+const RUTAS_PUBLICAS = ["/", "/login", "/auth", "/api", "/transparencia"];
 
 function esRutaPublica(path: string): boolean {
   return RUTAS_PUBLICAS.some((r) => path === r || path.startsWith(`${r}/`));

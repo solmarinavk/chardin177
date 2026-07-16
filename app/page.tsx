@@ -19,10 +19,21 @@ export default function HomePage() {
           </p>
         </div>
 
-        <Link href="/login" className="btn-primary w-full max-w-xs animar-aparecer">
-          Ingresar
-          <IconoFlecha className="h-4 w-4" />
-        </Link>
+        <div className="flex w-full max-w-xs flex-col items-center gap-3">
+          <Link
+            href="/transparencia"
+            className="btn-primary w-full animar-aparecer"
+          >
+            Ver la transparencia del edificio
+            <IconoFlecha className="h-4 w-4" />
+          </Link>
+          <Link
+            href="/login"
+            className="animar-aparecer text-sm font-semibold text-slate-400 hover:text-slate-700"
+          >
+            Ingresar (administración)
+          </Link>
+        </div>
 
         <ul
           className="animar-aparecer flex w-full flex-col gap-3 text-left"

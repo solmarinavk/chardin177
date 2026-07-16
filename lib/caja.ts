@@ -1,7 +1,13 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
-import type { Tables } from "@/lib/database.types";
+import type { Database, Tables } from "@/lib/database.types";
 import type { Periodo } from "@/lib/periodos";
 import { prorratear } from "@/lib/centimos";
+
+// Las funciones de lectura aceptan un cliente opcional. Por defecto usan el
+// cliente de sesión (`createClient`); la vista pública les pasa el cliente
+// anónimo (`createPublicClient`) para leer bajo las políticas RLS `pub_*`.
+export type ClienteDatos = SupabaseClient<Database>;
 
 export type Egreso = Tables<"egresos">;
 export type CategoriaEgreso = Tables<"categorias_egreso">;
@@ -15,8 +21,10 @@ export async function getCategorias(): Promise<CategoriaEgreso[]> {
 // El periodo "abierto" donde se registran egresos y se cobra: el más antiguo
 // no cerrado. (Puede convivir un emitido en cobranza con un borrador nuevo;
 // la caja viva es la del más antiguo.)
-export async function getPeriodoAbierto(): Promise<Periodo | null> {
-  const s = createClient();
+export async function getPeriodoAbierto(
+  client?: ClienteDatos,
+): Promise<Periodo | null> {
+  const s = client ?? createClient();
   const { data } = await s
     .from("periodos")
     .select("*")
@@ -33,8 +41,11 @@ export type FiltroEgresos = {
   categoriaId?: number | null;
 };
 
-export async function getEgresos(filtro: FiltroEgresos = {}): Promise<Egreso[]> {
-  const s = createClient();
+export async function getEgresos(
+  filtro: FiltroEgresos = {},
+  client?: ClienteDatos,
+): Promise<Egreso[]> {
+  const s = client ?? createClient();
   let q = s
     .from("egresos")
     .select("*")
@@ -60,8 +71,11 @@ export type LibroCaja = {
   saldoActualCent: number; // proyectado si abierto; el final real si cerrado
 };
 
-export async function getLibroCaja(periodo: Periodo): Promise<LibroCaja> {
-  const s = createClient();
+export async function getLibroCaja(
+  periodo: Periodo,
+  client?: ClienteDatos,
+): Promise<LibroCaja> {
+  const s = client ?? createClient();
 
   let ingresos = 0;
   if (periodo.estado === "cerrado") {
@@ -131,8 +145,10 @@ export type DeudaDpto = {
 };
 
 // Cuotas emitidas/cerradas con saldo pendiente, agrupadas por dpto.
-export async function getDeudasPorDpto(): Promise<DeudaDpto[]> {
-  const s = createClient();
+export async function getDeudasPorDpto(
+  client?: ClienteDatos,
+): Promise<DeudaDpto[]> {
+  const s = client ?? createClient();
   const { data: periodos } = await s
     .from("periodos")
     .select("id, anio, mes")
@@ -182,8 +198,10 @@ export type ConsumoDpto = {
   meses: Array<{ anio: number; mes: number; m3: number }>; // más antiguo primero
 };
 
-export async function getConsumo6Meses(): Promise<ConsumoDpto[]> {
-  const s = createClient();
+export async function getConsumo6Meses(
+  client?: ClienteDatos,
+): Promise<ConsumoDpto[]> {
+  const s = client ?? createClient();
   const { data: periodos } = await s
     .from("periodos")
     .select("id, anio, mes")
@@ -305,8 +323,10 @@ export async function getConciliaciones(): Promise<Conciliacion[]> {
 // ---------- Provisiones (saldo acumulado, para el dashboard) ----------
 export type SaldoProvision = { concepto: string; saldoCent: number };
 
-export async function getSaldosProvisiones(): Promise<SaldoProvision[]> {
-  const s = createClient();
+export async function getSaldosProvisiones(
+  client?: ClienteDatos,
+): Promise<SaldoProvision[]> {
+  const s = client ?? createClient();
   const [{ data: provisiones }, { data: movimientos }] = await Promise.all([
     s.from("provisiones").select("id, concepto").eq("activo", true).order("id"),
     s.from("movimientos_provision").select("provision_id, monto_cent"),

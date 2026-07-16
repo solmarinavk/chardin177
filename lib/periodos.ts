@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import type { Tables } from "@/lib/database.types";
+import type { ClienteDatos } from "@/lib/caja";
 
 export type Periodo = Tables<"periodos">;
 export type Cuota = Tables<"cuotas">;
@@ -54,14 +55,34 @@ export async function getDepartamentos(): Promise<Departamento[]> {
   return data ?? [];
 }
 
-export async function getCuotas(periodoId: number): Promise<Cuota[]> {
-  const s = createClient();
+export async function getCuotas(
+  periodoId: number,
+  client?: ClienteDatos,
+): Promise<Cuota[]> {
+  const s = client ?? createClient();
   const { data } = await s
     .from("cuotas")
     .select("*")
     .eq("periodo_id", periodoId)
     .order("dpto_id");
   return data ?? [];
+}
+
+// El periodo más reciente con cuotas ya calculadas (emitido o cerrado): el mes
+// que hoy se está cobrando. Base del semáforo público de pagos.
+export async function getPeriodoConCuotas(
+  client?: ClienteDatos,
+): Promise<Periodo | null> {
+  const s = client ?? createClient();
+  const { data } = await s
+    .from("periodos")
+    .select("*")
+    .in("estado", ["emitido", "cerrado"])
+    .order("anio", { ascending: false })
+    .order("mes", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return data ?? null;
 }
 
 export type Derrama = {
@@ -236,8 +257,10 @@ export type EstadoCuentaDpto = {
 
 // Estado de cuenta por dpto: Σ cuotas (cargos) vs Σ pagos (abonos), en periodos
 // emitidos o cerrados. saldo = cargos − abonos (positivo = debe).
-export async function getEstadosDeCuenta(): Promise<EstadoCuentaDpto[]> {
-  const s = createClient();
+export async function getEstadosDeCuenta(
+  client?: ClienteDatos,
+): Promise<EstadoCuentaDpto[]> {
+  const s = client ?? createClient();
   const { data: periodos } = await s
     .from("periodos")
     .select("id")
@@ -311,8 +334,9 @@ export async function getPagosPorCuota(
 // Céntimos pagados por cuota (para semáforo y estado de cuenta).
 export async function getPagadoPorCuota(
   periodoId: number,
+  client?: ClienteDatos,
 ): Promise<Map<number, number>> {
-  const s = createClient();
+  const s = client ?? createClient();
   const { data: cuotas } = await s
     .from("cuotas")
     .select("id")
