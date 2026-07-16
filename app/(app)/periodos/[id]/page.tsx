@@ -8,6 +8,7 @@ import {
   getPagosPorCuota,
   getDepartamentos,
   getDerramas,
+  getRecibosMesAnterior,
   type ResumenPeriodo,
 } from "@/lib/periodos";
 import { getLibroCaja } from "@/lib/caja";
@@ -15,6 +16,8 @@ import { getConstanciasPendientes } from "@/lib/constancias";
 import { pasosDelMes } from "@/lib/flujo";
 import { etiquetaPeriodo, formatoFecha, hoyLima } from "@/lib/fechas";
 import { formatoPEN } from "@/lib/centimos";
+import { textoResumenMes } from "@/lib/recibo";
+import { ResumenMes } from "@/components/ResumenMes";
 import { BUCKET_COMPROBANTES, urlFirmada } from "@/lib/storage";
 import { EstadoPeriodoBadge } from "@/components/estados";
 import { BotonExcel } from "@/components/BotonExcel";
@@ -59,11 +62,16 @@ export const metadata: Metadata = { title: "Periodo" };
 
 export default async function PeriodoDetallePage({
   params,
+  searchParams,
 }: {
   params: { id: string };
+  searchParams: { pagar?: string };
 }) {
   const id = Number(params.id);
   if (!Number.isInteger(id)) notFound();
+  // 5.4a · Pago en un toque: ?pagar=301 llega desde el edificio del inicio y
+  // abre directo el formulario de ese dpto (monto y fecha ya precargados).
+  const pagarDpto = Number(searchParams.pagar);
 
   // Portería solo usa el módulo de lecturas (PROPUESTA §5); los datos
   // financieros del periodo son para tesorería y admin. Los vecinos ven el
@@ -154,28 +162,13 @@ export default async function PeriodoDetallePage({
 
           {/* Paso 2 · Recibos */}
           {gestiona && (
-            <section
-              id="recibos"
-              className="card animar-aparecer scroll-mt-24 p-5"
-            >
-              <h2 className="titulo-seccion mb-3">Recibos del mes</h2>
-              <div className="flex flex-col gap-4">
-                <FormRecibo
-                  accion={guardarRecibo}
-                  periodoId={id}
-                  tipo="agua"
-                  montoActualCent={resumen.recibos.agua?.monto_cent ?? null}
-                  fotoUrl={fotoAgua}
-                />
-                <FormRecibo
-                  accion={guardarRecibo}
-                  periodoId={id}
-                  tipo="luz"
-                  montoActualCent={resumen.recibos.luz?.monto_cent ?? null}
-                  fotoUrl={fotoLuz}
-                />
-              </div>
-            </section>
+            <RecibosSection
+              periodoId={id}
+              periodo={periodo}
+              resumen={resumen}
+              fotoAgua={fotoAgua}
+              fotoLuz={fotoLuz}
+            />
           )}
 
           {/* Cuota extraordinaria (derrama) */}
@@ -283,12 +276,16 @@ export default async function PeriodoDetallePage({
                 />
               </div>
             </div>
-            <Semaforo cuotas={resumen.cuotas} pagadoPorCuota={resumen.pagadoPorCuota} />
+            <Semaforo
+              cuotas={resumen.cuotas}
+              pagadoPorCuota={resumen.pagadoPorCuota}
+              conCobro={gestiona && periodo.estado === "emitido"}
+            />
           </section>
 
           {/* Registrar pagos */}
           {gestiona && periodo.estado === "emitido" && (
-            <PagosSection resumen={resumen} periodoId={id} />
+            <PagosSection resumen={resumen} periodoId={id} pagarDpto={pagarDpto} />
           )}
 
           {/* Cerrar el mes (2.3) */}
@@ -350,6 +347,24 @@ export default async function PeriodoDetallePage({
             <p className="mt-2 text-xs text-slate-500">
               Abre el recibo de un dpto para compartirlo por WhatsApp o imprimirlo.
             </p>
+
+            {/* Resumen del mes completo para el grupo del edificio */}
+            <div className="mt-4 border-t border-slate-100 pt-4">
+              <h3 className="titulo-seccion mb-1">Resumen del mes para WhatsApp</h3>
+              <p className="mb-3 text-sm text-slate-600">
+                Los 10 departamentos en un solo mensaje, listo para el grupo del
+                edificio.
+              </p>
+              <ResumenMes
+                texto={textoResumenMes(
+                  periodo.anio,
+                  periodo.mes,
+                  resumen.cuotas,
+                  resumen.pagadoPorCuota,
+                  { vence: periodo.estado === "emitido" },
+                )}
+              />
+            </div>
           </section>
 
           {periodo.estado === "cerrado" && (
@@ -378,6 +393,47 @@ export default async function PeriodoDetallePage({
         </>
       )}
     </main>
+  );
+}
+
+// Paso 2 · Recibos del mes, con el monto del mes anterior como referencia
+// para detectar errores de digitación al vuelo (5.4b).
+async function RecibosSection({
+  periodoId,
+  periodo,
+  resumen,
+  fotoAgua,
+  fotoLuz,
+}: {
+  periodoId: number;
+  periodo: NonNullable<Awaited<ReturnType<typeof getPeriodo>>>;
+  resumen: ResumenPeriodo;
+  fotoAgua: string | null;
+  fotoLuz: string | null;
+}) {
+  const anteriores = await getRecibosMesAnterior(periodo);
+  return (
+    <section id="recibos" className="card animar-aparecer scroll-mt-24 p-5">
+      <h2 className="titulo-seccion mb-3">Recibos del mes</h2>
+      <div className="flex flex-col gap-4">
+        <FormRecibo
+          accion={guardarRecibo}
+          periodoId={periodoId}
+          tipo="agua"
+          montoActualCent={resumen.recibos.agua?.monto_cent ?? null}
+          montoAnteriorCent={anteriores.agua?.monto_cent ?? null}
+          fotoUrl={fotoAgua}
+        />
+        <FormRecibo
+          accion={guardarRecibo}
+          periodoId={periodoId}
+          tipo="luz"
+          montoActualCent={resumen.recibos.luz?.monto_cent ?? null}
+          montoAnteriorCent={anteriores.luz?.monto_cent ?? null}
+          fotoUrl={fotoLuz}
+        />
+      </div>
+    </section>
   );
 }
 
@@ -521,9 +577,11 @@ async function DerramaSection({ periodoId }: { periodoId: number }) {
 async function PagosSection({
   resumen,
   periodoId,
+  pagarDpto,
 }: {
   resumen: ResumenPeriodo;
   periodoId: number;
+  pagarDpto?: number;
 }) {
   const hoy = hoyLima();
   const [pagosPorCuota, constancias] = await Promise.all([
@@ -621,8 +679,15 @@ async function PagosSection({
           const pagadoCent = resumen.pagadoPorCuota.get(c.id) ?? 0;
           const saldo = c.total_cent - pagadoCent;
           const pagos = pagosPorCuota.get(c.id) ?? [];
+          const abrirPago = pagarDpto === c.dpto_id && saldo > 0;
           return (
-            <li key={c.id} className="rounded-xl border border-slate-200 p-3">
+            <li
+              key={c.id}
+              id={`dpto-${c.dpto_id}`}
+              className={`scroll-mt-24 rounded-xl border p-3 ${
+                abrirPago ? "border-slate-900 ring-2 ring-slate-900/10" : "border-slate-200"
+              }`}
+            >
               <div className="flex items-center justify-between gap-2">
                 <span className="font-bold text-slate-900">Dpto {c.dpto_id}</span>
                 <span className="num text-sm text-slate-600">
@@ -672,7 +737,7 @@ async function PagosSection({
                   Pagado
                 </p>
               ) : (
-                <details className="group">
+                <details className="group" open={abrirPago}>
                   <summary className="mt-1 flex cursor-pointer list-none items-center gap-1 text-sm font-semibold text-slate-700 hover:text-slate-900">
                     <IconoFlecha className="h-3.5 w-3.5 transition-transform group-open:rotate-90" />
                     Registrar pago

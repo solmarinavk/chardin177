@@ -8,23 +8,40 @@ import {
   mesesDesde,
   textoAntiguedad,
 } from "@/lib/fechas";
-import { Semaforo } from "@/components/Semaforo";
+import { Edificio } from "@/components/Edificio";
+import { mapaEdificio } from "@/lib/edificio";
+import { TIPOS_DATO, TIPOS_DATO_PUBLICO } from "@/lib/exportar_datos";
+import { SelectorMes } from "@/components/SelectorMes";
+import { ResumenMes } from "@/components/ResumenMes";
+import { textoResumenMes } from "@/lib/recibo";
 import { ConsumoAgua } from "@/components/ConsumoAgua";
 import { Progreso } from "@/components/Progreso";
-import { IconoAlerta, IconoFlecha, IconoCandado } from "@/components/iconos";
+import {
+  IconoAlerta,
+  IconoFlecha,
+  IconoCandado,
+  IconoDescarga,
+} from "@/components/iconos";
 
 // Página PÚBLICA (sin login). Se comparte por WhatsApp con los vecinos.
 // Solo lectura: los datos vienen del cliente anónimo (RLS `pub_*`).
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Transparencia · Chardin 177",
+  title: "Las cuentas del edificio · Chardin 177",
   description:
-    "Caja, gastos, consumo de agua y pagos del edificio Chardin 177, en vivo y abiertos a todos.",
+    "La caja, los gastos, el consumo de agua y los pagos del mes del edificio Chardin 177, siempre al día.",
 };
 
-export default async function TransparenciaPage() {
-  const d = await getDatosTransparencia();
+export default async function TransparenciaPage({
+  searchParams,
+}: {
+  searchParams: { mes?: string };
+}) {
+  const mesElegido = Number(searchParams.mes);
+  const d = await getDatosTransparencia(
+    Number.isInteger(mesElegido) ? mesElegido : undefined,
+  );
   const hayAlgo =
     d.libro ||
     d.semaforo ||
@@ -59,15 +76,15 @@ export default async function TransparenciaPage() {
           </div>
           <div className="mt-4">
             <h2 className="text-2xl font-black tracking-tight text-slate-900">
-              Transparencia del edificio
+              Las cuentas del edificio
             </h2>
             <p className="mt-1 text-sm text-slate-600">
-              Todo a la vista: cuánto hay en caja, en qué se gasta, cuánta agua
-              consume cada depto y quién ya pagó. Esta página es{" "}
+              Cuánto hay en caja, en qué se gasta, el consumo de agua y los
+              pagos del mes, siempre al día. Es una página{" "}
               <span className="font-semibold text-slate-800">
-                solo de lectura
+                solo de consulta
               </span>
-              .
+              : aquí no se puede modificar nada.
             </p>
           </div>
         </header>
@@ -131,17 +148,27 @@ export default async function TransparenciaPage() {
           </section>
         )}
 
-        {/* ——— Semáforo de pagos del mes ——— */}
+        {/* ——— Pagos del mes: el edificio ——— */}
         {d.semaforo && (
           <section className="card animar-aparecer p-5">
-            <div className="flex items-baseline justify-between gap-2">
+            <div className="flex items-center justify-between gap-2">
               <h3 className="titulo-seccion">Quién pagó</h3>
-              <span className="text-xs font-semibold text-slate-500">
-                {etiquetaPeriodo(
-                  d.semaforo.periodo.anio,
-                  d.semaforo.periodo.mes,
-                )}
-              </span>
+              {d.periodos.length > 1 ? (
+                <SelectorMes
+                  opciones={d.periodos.map((p) => ({
+                    id: p.id,
+                    etiqueta: etiquetaPeriodo(p.anio, p.mes),
+                  }))}
+                  actual={d.semaforo.periodo.id}
+                />
+              ) : (
+                <span className="text-xs font-semibold text-slate-500">
+                  {etiquetaPeriodo(
+                    d.semaforo.periodo.anio,
+                    d.semaforo.periodo.mes,
+                  )}
+                </span>
+              )}
             </div>
 
             <div className="mb-4 mt-2">
@@ -164,10 +191,22 @@ export default async function TransparenciaPage() {
               </div>
             </div>
 
-            <Semaforo
-              cuotas={d.semaforo.cuotas}
-              pagadoPorCuota={d.semaforo.pagadoPorCuota}
+            <Edificio
+              deptos={mapaEdificio(d.semaforo.cuotas, d.semaforo.pagadoPorCuota)}
             />
+            <p className="mt-3 text-center text-xs text-slate-500">
+              Toca una ventana para ver el detalle del departamento.
+            </p>
+            <div className="mt-4">
+              <ResumenMes
+                texto={textoResumenMes(
+                  d.semaforo.periodo.anio,
+                  d.semaforo.periodo.mes,
+                  d.semaforo.cuotas,
+                  d.semaforo.pagadoPorCuota,
+                )}
+              />
+            </div>
           </section>
         )}
 
@@ -275,12 +314,12 @@ export default async function TransparenciaPage() {
           </section>
         )}
 
-        {/* ——— Gastos con comprobante ——— */}
+        {/* ——— Gastos con comprobante (los 15 más recientes; el resto, en el Excel) ——— */}
         {d.egresos.length > 0 && (
           <section className="card animar-aparecer p-5">
             <h3 className="titulo-seccion mb-3">Gastos del edificio</h3>
             <ul className="flex flex-col divide-y divide-slate-100">
-              {d.egresos.map((e) => (
+              {d.egresos.slice(0, 15).map((e) => (
                 <li
                   key={e.id}
                   className="flex items-baseline justify-between gap-3 py-2 text-sm"
@@ -312,6 +351,12 @@ export default async function TransparenciaPage() {
                 </li>
               ))}
             </ul>
+            {d.egresos.length > 15 && (
+              <p className="mt-3 text-xs text-slate-500">
+                Estos son los 15 gastos más recientes. Los anteriores están en la
+                descarga de Excel (más abajo).
+              </p>
+            )}
           </section>
         )}
 
@@ -323,8 +368,77 @@ export default async function TransparenciaPage() {
           </section>
         )}
 
+        {/* ——— Descargar en Excel (público, 5.2) ——— */}
+        {d.periodos.length > 0 && (
+          <section className="card animar-aparecer p-5">
+            <h3 className="titulo-seccion mb-1">Descargar en Excel</h3>
+            <p className="text-sm text-slate-600">
+              Baja estos mismos datos a un archivo <span className="font-semibold">.xlsx</span>{" "}
+              (montos en soles) para revisarlos con calma.
+            </p>
+            <form
+              action="/api/exportar-publico"
+              method="get"
+              className="mt-4 flex flex-col gap-4"
+            >
+              <fieldset>
+                <legend className="etiqueta">¿Qué datos?</legend>
+                <div className="mt-1 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {TIPOS_DATO.filter((t) => TIPOS_DATO_PUBLICO.includes(t.clave)).map(
+                    (t) => (
+                      <label
+                        key={t.clave}
+                        className="flex items-center gap-2.5 rounded-xl border border-slate-200 p-2.5"
+                      >
+                        <input
+                          type="checkbox"
+                          name="datos"
+                          value={t.clave}
+                          defaultChecked
+                          className="h-5 w-5 rounded border-slate-300 accent-slate-900"
+                        />
+                        <span className="text-sm font-medium text-slate-800">
+                          {t.etiqueta}
+                        </span>
+                      </label>
+                    ),
+                  )}
+                </div>
+              </fieldset>
+              <div className="grid grid-cols-2 gap-3">
+                <label className="flex flex-col gap-1 text-sm">
+                  <span className="text-slate-600">Desde</span>
+                  <select name="desde" className="campo" defaultValue="">
+                    <option value="">(el más antiguo)</option>
+                    {d.periodos.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {etiquetaPeriodo(p.anio, p.mes)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="flex flex-col gap-1 text-sm">
+                  <span className="text-slate-600">Hasta</span>
+                  <select name="hasta" className="campo" defaultValue="">
+                    <option value="">(el más reciente)</option>
+                    {d.periodos.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {etiquetaPeriodo(p.anio, p.mes)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              <button type="submit" className="btn-primary w-full">
+                <IconoDescarga className="h-4 w-4" />
+                Descargar Excel
+              </button>
+            </form>
+          </section>
+        )}
+
         <footer className="pb-6 pt-2 text-center text-xs text-slate-400">
-          Chardin 177 · Administración transparente · Solo lectura
+          Chardin 177 · Barranco, Lima · Página de consulta
         </footer>
       </div>
     </main>

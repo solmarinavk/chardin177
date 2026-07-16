@@ -8,9 +8,9 @@ export const metadata: Metadata = { title: "Ayuda" };
 const PASOS = [
   { n: 1, titulo: "Lecturas de agua", quien: "Portería", texto: "Anota la lectura actual de los 10 medidores. La anterior se jala sola del mes pasado." },
   { n: 2, titulo: "Recibos del mes", quien: "Tesorería", texto: "Registra el monto del recibo de agua (Sedapal) y de luz, con su foto." },
-  { n: 3, titulo: "Calcular cuotas", quien: "Tesorería", texto: "El sistema reparte todo y calcula la cuota de cada depto. Nadie digita cuotas." },
+  { n: 3, titulo: "Calcular cuotas", quien: "Tesorería", texto: "El sistema reparte todo y calcula la cuota de cada dpto. Nadie digita cuotas." },
   { n: 4, titulo: "Emitir", quien: "Tesorería / Admin", texto: "Congela las cuotas del mes. Desde aquí ya no se editan lecturas ni recibos." },
-  { n: 5, titulo: "Cobrar", quien: "Tesorería", texto: "Registra los pagos de cada depto. El semáforo se pone verde solo." },
+  { n: 5, titulo: "Cobrar", quien: "Tesorería", texto: "Registra los pagos de cada dpto. El semáforo se pone verde solo." },
   { n: 6, titulo: "Cerrar el mes", quien: "Tesorería / Admin", texto: "Cuadra la caja, fija el saldo y abre el mes siguiente con el saldo arrastrado." },
 ];
 
@@ -18,17 +18,17 @@ type Seccion = { titulo: string; puntos: string[] };
 
 const SECCIONES: Seccion[] = [
   {
-    titulo: "Transparencia pública",
+    titulo: "Las cuentas del edificio (página pública)",
     puntos: [
       "La página /transparencia es abierta (sin clave): muéstrala o comparte el enlace por WhatsApp.",
-      "Ahí todos ven la caja, los gastos con comprobante, el consumo de agua y quién pagó.",
-      "Es solo de lectura: nadie puede cambiar nada sin entrar con su usuario.",
+      "Ahí todos ven la caja, los gastos con comprobante, el consumo de agua y los pagos del mes.",
+      "Es solo de consulta: nadie puede cambiar nada sin entrar con su usuario.",
     ],
   },
   {
     titulo: "Registrar un pago",
     puntos: [
-      "Entra al mes emitido → Cobranza → busca el depto → Registrar pago.",
+      "Entra al mes emitido → Cobranza → busca el dpto → Registrar pago.",
       "Pon el monto (puede ser parcial), la fecha y el medio (Yape, transferencia…).",
       "Si el vecino te mandó su comprobante por WhatsApp, adjúntalo.",
     ],
@@ -44,7 +44,7 @@ const SECCIONES: Seccion[] = [
   {
     titulo: "Cuota extraordinaria (derrama)",
     puntos: [
-      "En el mes en borrador → Cuota extraordinaria → concepto y monto por depto.",
+      "En el mes en borrador → Cuota extraordinaria → concepto y monto por dpto.",
       "Pulsa Recalcular cuotas: aparece como EXTRA en el recibo de cada uno.",
     ],
   },
@@ -52,14 +52,14 @@ const SECCIONES: Seccion[] = [
     titulo: "Cuadre de agua (conciliación)",
     puntos: [
       "Caja → Conciliación de agua → elige el rango y pon el total real de Sedapal.",
-      "Mira la vista previa por depto y aplica: agrega ajustes al mes en borrador.",
+      "Mira la vista previa por dpto y aplica: agrega ajustes al mes en borrador.",
     ],
   },
   {
     titulo: "Descargar a Excel",
     puntos: [
       "Cada módulo tiene un botón Descargar Excel de lo que estás viendo.",
-      "En Exportar puedes bajar todo con filtros (rango de meses, depto, categoría).",
+      "En Exportar puedes bajar todo con filtros (rango de meses, dpto, categoría).",
       "Los montos salen en soles; puedes sumarlos en Excel.",
     ],
   },
@@ -148,7 +148,7 @@ export default async function AyudaPage() {
           href="/transparencia"
           className="mt-3 inline-flex items-center gap-1 font-semibold text-slate-700 hover:text-slate-900"
         >
-          Ver la transparencia pública
+          Ver las cuentas del edificio
           <IconoFlecha className="h-4 w-4" />
         </Link>
       </section>

@@ -11,7 +11,7 @@ import {
 import { etiquetaPeriodo } from "@/lib/fechas";
 import { BUCKET_MEDIDORES, urlFirmada } from "@/lib/storage";
 import { FormLecturas, type FilaLectura } from "@/components/forms/lecturas";
-import { guardarLecturas } from "./acciones";
+import { guardarLecturas, autoguardarLectura } from "./acciones";
 
 export const metadata: Metadata = { title: "Lecturas de agua" };
 
@@ -91,7 +91,7 @@ export default async function LecturasPage() {
         </p>
       </div>
 
-      <FormLecturas accion={guardarLecturas} periodoId={borrador.id} filas={filas} />
+      <FormLecturas accion={guardarLecturas} autoguardar={autoguardarLectura} periodoId={borrador.id} filas={filas} />
     </main>
   );
 }

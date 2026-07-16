@@ -10,6 +10,64 @@ import type { Database } from "@/lib/database.types";
 
 type LecturaInsert = Database["public"]["Tables"]["lecturas_agua"]["Insert"];
 
+// 5.4c · Autoguardado de UNA lectura al salir del campo, para no perder lo
+// avanzado si se corta el internet a mitad. La foto y la confirmación final
+// siguen yendo por el botón Guardar. La lectura anterior la deriva el servidor
+// (misma regla que el guardado normal: nunca se digita si hay mes previo).
+export async function autoguardarLectura(
+  periodoId: number,
+  dpto: number,
+  actual: number,
+): Promise<{ ok: boolean; error?: string }> {
+  await requireRol(["porteria", "tesoreria", "admin"]);
+  if (!Number.isInteger(periodoId) || !Number.isInteger(dpto) || !Number.isInteger(actual) || actual < 0)
+    return { ok: false, error: "Lectura inválida." };
+
+  const periodo = await getPeriodo(periodoId);
+  if (!periodo || periodo.estado !== "borrador")
+    return { ok: false, error: "Este mes ya no acepta lecturas." };
+
+  const s = createClient();
+  const {
+    data: { user },
+  } = await s.auth.getUser();
+
+  const anteriores = await getLecturasAnteriores(periodo.anio, periodo.mes);
+  let anterior = anteriores.get(dpto);
+  if (anterior === undefined) {
+    // Primer mes: conserva la anterior ya guardada de este mismo periodo (si
+    // hay); si no, no se puede autoguardar sin ese dato — que use el botón.
+    const { data: previa } = await s
+      .from("lecturas_agua")
+      .select("lectura_anterior")
+      .eq("periodo_id", periodoId)
+      .eq("dpto_id", dpto)
+      .maybeSingle();
+    if (!previa) return { ok: false, error: "Completa también la lectura anterior y usa Guardar." };
+    anterior = previa.lectura_anterior;
+  }
+  if (actual < anterior)
+    return {
+      ok: false,
+      error: `La actual (${actual}) no puede ser menor que la anterior (${anterior}).`,
+    };
+
+  const { error } = await s.from("lecturas_agua").upsert(
+    {
+      periodo_id: periodoId,
+      dpto_id: dpto,
+      lectura_anterior: anterior,
+      lectura_actual: actual,
+      registrado_por: user?.id ?? null,
+    },
+    { onConflict: "periodo_id,dpto_id" },
+  );
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath(`/periodos/${periodoId}`);
+  return { ok: true };
+}
+
 // 1.2 · Guardar las lecturas del periodo en borrador. Acepta guardado PARCIAL:
 // el portero puede subir piso por piso; los dptos con la casilla vacía se
 // omiten sin perder lo ya guardado.

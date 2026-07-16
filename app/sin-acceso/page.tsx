@@ -28,6 +28,12 @@ export default function SinAccesoPage() {
             Salir e ingresar con otra cuenta
           </button>
         </form>
+        <Link
+          href="/transparencia"
+          className="text-sm font-semibold text-slate-500 underline underline-offset-2 hover:text-slate-900"
+        >
+          Ver las cuentas del edificio (no necesita cuenta)
+        </Link>
       </div>
     </main>
   );

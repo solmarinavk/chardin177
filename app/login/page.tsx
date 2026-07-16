@@ -46,7 +46,8 @@ export default function LoginPage() {
               Chardin 177
             </h1>
             <p className="mt-1 text-slate-600">
-              Entra con el correo y la contraseña que te dieron.
+              Acceso para administración, tesorería y portería. Entra con el
+              correo y la contraseña que te dieron.
             </p>
           </div>
 
@@ -110,7 +111,17 @@ export default function LoginPage() {
           </form>
         </div>
 
-        <p className="mt-5 text-center text-sm text-slate-500">
+        <p className="mt-5 text-center text-sm text-slate-600">
+          ¿Solo quieres ver las cuentas del edificio?{" "}
+          <Link
+            href="/transparencia"
+            className="font-semibold text-slate-900 underline underline-offset-2"
+          >
+            Míralas aquí, sin cuenta
+          </Link>
+          .
+        </p>
+        <p className="mt-2 text-center text-sm text-slate-500">
           ¿Problemas para entrar? Escribe a la administración del edificio.
         </p>
         <p className="mt-2 text-center">

@@ -31,14 +31,18 @@ const ESTILO = {
   },
 } as const;
 
-// 1.8 · Semáforo público: los 10 dptos en verde (pagó) / ámbar (parcial) /
-// rojo (pendiente), con resumen y montos si se pasa `pagadoPorCuota`.
+// 1.8 · Semáforo: los 10 dptos en verde (pagó) / ámbar (parcial) / rojo
+// (pendiente), con montos si se pasa `pagadoPorCuota`. Con `conCobro` (vista
+// tesorería del periodo), tocar un dpto con deuda salta a su formulario de
+// pago ya precargado (5.4a).
 export function Semaforo({
   cuotas,
   pagadoPorCuota,
+  conCobro = false,
 }: {
   cuotas: Cuota[];
   pagadoPorCuota?: Map<number, number>;
+  conCobro?: boolean;
 }) {
   const n = cuentas(cuotas);
   return (
@@ -60,11 +64,9 @@ export function Semaforo({
           const e = ESTILO[c.estado];
           const Icono = e.icono;
           const pagado = pagadoPorCuota?.get(c.id);
-          return (
-            <li
-              key={c.dpto_id}
-              className={`rounded-xl border p-3 ${e.card}`}
-            >
+          const cobrable = conCobro && c.estado !== "pagado";
+          const contenido = (
+            <>
               <div className="flex items-center justify-between gap-1">
                 <span className="font-bold text-slate-900">{c.dpto_id}</span>
                 <span
@@ -80,6 +82,26 @@ export function Semaforo({
                     ? formatoPEN(c.total_cent)
                     : `${formatoPEN(pagado ?? 0)} / ${formatoPEN(c.total_cent)}`}
                 </p>
+              )}
+              {cobrable && (
+                <p className="mt-1 text-[11px] font-semibold text-slate-500 underline underline-offset-2">
+                  Registrar pago
+                </p>
+              )}
+            </>
+          );
+          return (
+            <li key={c.dpto_id}>
+              {cobrable ? (
+                <a
+                  href={`?pagar=${c.dpto_id}#dpto-${c.dpto_id}`}
+                  className={`block rounded-xl border p-3 transition hover:-translate-y-0.5 hover:shadow ${e.card}`}
+                  aria-label={`Registrar pago del dpto ${c.dpto_id}`}
+                >
+                  {contenido}
+                </a>
+              ) : (
+                <div className={`rounded-xl border p-3 ${e.card}`}>{contenido}</div>
               )}
             </li>
           );

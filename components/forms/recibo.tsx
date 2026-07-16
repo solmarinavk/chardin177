@@ -14,12 +14,14 @@ export function FormRecibo({
   periodoId,
   tipo,
   montoActualCent,
+  montoAnteriorCent = null,
   fotoUrl = null,
 }: {
   accion: Accion;
   periodoId: number;
   tipo: TipoRecibo;
   montoActualCent: number | null;
+  montoAnteriorCent?: number | null; // referencia del mes pasado (5.4b)
   fotoUrl?: string | null;
 }) {
   const [estado, formAction] = useFormState(accion, ESTADO_INICIAL);
@@ -64,6 +66,12 @@ export function FormRecibo({
           className="campo num"
           placeholder="Ej. 488.70"
         />
+        {montoAnteriorCent !== null && (
+          <p className="num mt-1 text-xs text-slate-500">
+            El mes pasado: S/ {(montoAnteriorCent / 100).toFixed(2)} — si el de
+            hoy es muy distinto, revisa el recibo.
+          </p>
+        )}
       </div>
 
       <div className="mt-3">

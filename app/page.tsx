@@ -24,7 +24,7 @@ export default function HomePage() {
             href="/transparencia"
             className="btn-primary w-full animar-aparecer"
           >
-            Ver la transparencia del edificio
+            Ver las cuentas del edificio
             <IconoFlecha className="h-4 w-4" />
           </Link>
           <Link
@@ -62,7 +62,7 @@ export default function HomePage() {
               <IconoRecibo className="h-5 w-5" />
             </span>
             <p className="text-sm text-slate-700">
-              <span className="font-bold">Transparencia total</span>: cada gasto
+              <span className="font-bold">Todo documentado</span>: cada gasto
               con su comprobante y toda la historia guardada.
             </p>
           </li>

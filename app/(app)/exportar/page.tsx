@@ -17,6 +17,28 @@ export default async function ExportarPage() {
     getCategorias(),
   ]);
 
+  if (periodos.length === 0) {
+    return (
+      <main className="flex flex-col gap-5">
+        <h1 className="animar-aparecer text-2xl font-black tracking-tight text-slate-900">
+          Exportar a Excel
+        </h1>
+        <section className="card animar-aparecer p-6 text-center">
+          <p className="text-4xl" aria-hidden>
+            📊
+          </p>
+          <h2 className="mt-2 text-lg font-bold text-slate-900">
+            Aún no hay datos que exportar
+          </h2>
+          <p className="mt-1 text-slate-600">
+            Cuando exista al menos un mes creado, aquí podrás descargarlo todo
+            en Excel.
+          </p>
+        </section>
+      </main>
+    );
+  }
+
   return (
     <main className="flex flex-col gap-5">
       <div className="animar-aparecer">
