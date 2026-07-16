@@ -4,8 +4,8 @@ import type { Database } from "@/lib/database.types";
 
 type CookieAEscribir = { name: string; value: string; options: CookieOptions };
 
-// Rutas que NO requieren sesión.
-const RUTAS_PUBLICAS = ["/", "/login", "/auth"];
+// Rutas que NO requieren sesión. /api se protege por su cuenta (ej. CRON_SECRET).
+const RUTAS_PUBLICAS = ["/", "/login", "/auth", "/api"];
 
 function esRutaPublica(path: string): boolean {
   return RUTAS_PUBLICAS.some((r) => path === r || path.startsWith(`${r}/`));

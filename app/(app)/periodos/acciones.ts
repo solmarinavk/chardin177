@@ -14,6 +14,7 @@ import {
   archivoConContenido,
   subirFoto,
 } from "@/lib/storage";
+import { notificarEmision } from "@/lib/notificaciones";
 import type { MedioPago, TipoRecibo } from "@/lib/database.types";
 
 const TESORERIA: ("tesoreria" | "admin")[] = ["tesoreria", "admin"];
@@ -132,8 +133,17 @@ export async function emitirPeriodo(
   const { error } = await s.rpc("emitir_periodo", { p_periodo: periodoId });
   if (error) return { ok: false, error: mensajeError(error) };
 
+  // 3.5 · Notifica a los residentes (best-effort: nunca hace fallar la emisión).
+  let notif = "";
+  try {
+    const { enviados } = await notificarEmision(periodoId);
+    if (enviados > 0) notif = ` Se notificó a ${enviados} residente(s) por correo.`;
+  } catch {
+    // Si el correo falla, la emisión ya quedó hecha; no se interrumpe.
+  }
+
   revalidatePath(`/periodos/${periodoId}`);
-  return { ok: true, error: null, mensaje: "Periodo emitido." };
+  return { ok: true, error: null, mensaje: `Periodo emitido.${notif}` };
 }
 
 // 1.7 · Registrar un pago de una cuota (soporta pago parcial), con comprobante opcional.
