@@ -14,7 +14,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "seed:perfiles": "tsx scripts/seed_perfiles.ts"
+    "seed:perfiles": "tsx scripts/seed_perfiles.ts",
+    "migrar:excel": "tsx scripts/migrar_excel.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.3",

@@ -143,7 +143,7 @@ export const MENU: ItemMenu[] = [
     corta: "Docs",
     icono: "documento",
     roles: ["tesoreria", "admin"],
-    activo: false,
+    activo: true,
   },
   {
     href: "/administracion",
