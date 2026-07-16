@@ -10,9 +10,15 @@ import {
 } from "@/lib/fechas";
 import { Edificio } from "@/components/Edificio";
 import { mapaEdificio } from "@/lib/edificio";
+import { TIPOS_DATO, TIPOS_DATO_PUBLICO } from "@/lib/exportar_datos";
 import { ConsumoAgua } from "@/components/ConsumoAgua";
 import { Progreso } from "@/components/Progreso";
-import { IconoAlerta, IconoFlecha, IconoCandado } from "@/components/iconos";
+import {
+  IconoAlerta,
+  IconoFlecha,
+  IconoCandado,
+  IconoDescarga,
+} from "@/components/iconos";
 
 // Página PÚBLICA (sin login). Se comparte por WhatsApp con los vecinos.
 // Solo lectura: los datos vienen del cliente anónimo (RLS `pub_*`).
@@ -323,6 +329,75 @@ export default async function TransparenciaPage() {
           <section className="card animar-aparecer p-5">
             <h3 className="titulo-seccion mb-3">Consumo de agua por dpto</h3>
             <ConsumoAgua consumos={d.consumos} />
+          </section>
+        )}
+
+        {/* ——— Descargar en Excel (público, 5.2) ——— */}
+        {d.periodos.length > 0 && (
+          <section className="card animar-aparecer p-5">
+            <h3 className="titulo-seccion mb-1">Descargar en Excel</h3>
+            <p className="text-sm text-slate-600">
+              Baja estos mismos datos a un archivo <span className="font-semibold">.xlsx</span>{" "}
+              (montos en soles) para revisarlos con calma.
+            </p>
+            <form
+              action="/api/exportar-publico"
+              method="get"
+              className="mt-4 flex flex-col gap-4"
+            >
+              <fieldset>
+                <legend className="etiqueta">¿Qué datos?</legend>
+                <div className="mt-1 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {TIPOS_DATO.filter((t) => TIPOS_DATO_PUBLICO.includes(t.clave)).map(
+                    (t) => (
+                      <label
+                        key={t.clave}
+                        className="flex items-center gap-2.5 rounded-xl border border-slate-200 p-2.5"
+                      >
+                        <input
+                          type="checkbox"
+                          name="datos"
+                          value={t.clave}
+                          defaultChecked
+                          className="h-5 w-5 rounded border-slate-300 accent-slate-900"
+                        />
+                        <span className="text-sm font-medium text-slate-800">
+                          {t.etiqueta}
+                        </span>
+                      </label>
+                    ),
+                  )}
+                </div>
+              </fieldset>
+              <div className="grid grid-cols-2 gap-3">
+                <label className="flex flex-col gap-1 text-sm">
+                  <span className="text-slate-600">Desde</span>
+                  <select name="desde" className="campo" defaultValue="">
+                    <option value="">(el más antiguo)</option>
+                    {d.periodos.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {etiquetaPeriodo(p.anio, p.mes)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="flex flex-col gap-1 text-sm">
+                  <span className="text-slate-600">Hasta</span>
+                  <select name="hasta" className="campo" defaultValue="">
+                    <option value="">(el más reciente)</option>
+                    {d.periodos.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {etiquetaPeriodo(p.anio, p.mes)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              <button type="submit" className="btn-primary w-full">
+                <IconoDescarga className="h-4 w-4" />
+                Descargar Excel
+              </button>
+            </form>
           </section>
         )}
 

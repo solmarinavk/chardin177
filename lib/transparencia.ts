@@ -37,6 +37,8 @@ export type SemaforoPublico = {
   recaudadoCent: number;
 };
 
+export type PeriodoPublico = { id: number; anio: number; mes: number };
+
 export type DatosTransparencia = {
   libro: LibroCaja | null;
   totalProvisionesCent: number;
@@ -47,14 +49,21 @@ export type DatosTransparencia = {
   semaforo: SemaforoPublico | null;
   estados: EstadoCuentaDpto[];
   deudas: DeudaDpto[];
+  periodos: PeriodoPublico[]; // meses ya emitidos/cerrados, del más nuevo al más viejo
 };
 
 export async function getDatosTransparencia(): Promise<DatosTransparencia> {
   const s = createPublicClient();
 
-  const [abierto, periodoSemaforo] = await Promise.all([
+  const [abierto, periodoSemaforo, { data: periodosLista }] = await Promise.all([
     getPeriodoAbierto(s),
     getPeriodoConCuotas(s),
+    s
+      .from("periodos")
+      .select("id, anio, mes")
+      .in("estado", ["emitido", "cerrado"])
+      .order("anio", { ascending: false })
+      .order("mes", { ascending: false }),
   ]);
 
   const [libro, provisiones, consumos, egresosRaw, estados, deudas] =
@@ -116,5 +125,6 @@ export async function getDatosTransparencia(): Promise<DatosTransparencia> {
     semaforo,
     estados,
     deudas,
+    periodos: periodosLista ?? [],
   };
 }

@@ -1,12 +1,15 @@
 import { createClient } from "@/lib/supabase/server";
+import type { ClienteDatos } from "@/lib/caja";
 import { etiquetaPeriodo } from "@/lib/fechas";
 import type { HojaExcel } from "@/lib/exportar";
 
-// Arma las hojas de datos para el exportador (4.6) leyendo con el cliente de
-// sesión, así que respeta RLS igual que el resto de la app. Todo en céntimos;
-// el formato a soles lo hace lib/exportar.ts.
+// Arma las hojas de datos para el exportador (4.6). Por defecto lee con el
+// cliente de sesión (respeta RLS igual que el resto de la app); el export
+// PÚBLICO (5.2) le pasa el cliente anónimo, con lo que las políticas `pub_*`
+// son la única puerta. Todo en céntimos; el formato a soles lo hace
+// lib/exportar.ts.
 
-export type TipoDato = "cuotas" | "pagos" | "egresos" | "estado" | "caja";
+export type TipoDato = "cuotas" | "pagos" | "egresos" | "estado" | "caja" | "consumo";
 
 export const TIPOS_DATO: { clave: TipoDato; etiqueta: string }[] = [
   { clave: "cuotas", etiqueta: "Cuotas por departamento" },
@@ -14,6 +17,17 @@ export const TIPOS_DATO: { clave: TipoDato; etiqueta: string }[] = [
   { clave: "egresos", etiqueta: "Egresos / gastos" },
   { clave: "estado", etiqueta: "Estado de cuenta por dpto" },
   { clave: "caja", etiqueta: "Caja por periodo" },
+  { clave: "consumo", etiqueta: "Consumo de agua por dpto" },
+];
+
+// Lo que puede bajar el PÚBLICO sin login (5.2): solo datos de las tablas de
+// transparencia. Nada de residentes, perfiles, bitácora ni constancias.
+export const TIPOS_DATO_PUBLICO: TipoDato[] = [
+  "cuotas",
+  "pagos",
+  "egresos",
+  "caja",
+  "consumo",
 ];
 
 export type OpcionesExport = {
@@ -46,7 +60,7 @@ const orden = (p: { anio: number; mes: number }) => p.anio * 12 + p.mes;
 
 // Periodos que entran en el export, según el filtro (uno, un rango, o todos).
 async function resolverPeriodos(
-  s: ReturnType<typeof createClient>,
+  s: ClienteDatos,
   o: OpcionesExport,
 ): Promise<PeriodoRef[]> {
   const { data } = await s
@@ -69,7 +83,7 @@ async function resolverPeriodos(
 }
 
 async function hojaCuotas(
-  s: ReturnType<typeof createClient>,
+  s: ClienteDatos,
   periodos: PeriodoRef[],
   o: OpcionesExport,
 ): Promise<HojaExcel | null> {
@@ -103,7 +117,7 @@ async function hojaCuotas(
 }
 
 async function hojaPagos(
-  s: ReturnType<typeof createClient>,
+  s: ClienteDatos,
   periodos: PeriodoRef[],
   o: OpcionesExport,
 ): Promise<HojaExcel | null> {
@@ -156,7 +170,7 @@ function colsPagos() {
 }
 
 async function hojaEgresos(
-  s: ReturnType<typeof createClient>,
+  s: ClienteDatos,
   periodos: PeriodoRef[],
   o: OpcionesExport,
 ): Promise<HojaExcel | null> {
@@ -192,7 +206,7 @@ async function hojaEgresos(
 }
 
 async function hojaEstadoCuenta(
-  s: ReturnType<typeof createClient>,
+  s: ClienteDatos,
   periodos: PeriodoRef[],
   o: OpcionesExport,
 ): Promise<HojaExcel | null> {
@@ -261,9 +275,50 @@ function hojaCaja(periodos: PeriodoRef[]): HojaExcel | null {
   };
 }
 
-// Arma todas las hojas pedidas, en orden estable.
-export async function armarHojas(o: OpcionesExport): Promise<HojaExcel[]> {
-  const s = createClient();
+async function hojaConsumo(
+  s: ClienteDatos,
+  periodos: PeriodoRef[],
+  o: OpcionesExport,
+): Promise<HojaExcel | null> {
+  const ids = periodos.map((p) => p.id);
+  if (ids.length === 0) return null;
+  const etiqueta = new Map(periodos.map((p) => [p.id, etiquetaPeriodo(p.anio, p.mes)]));
+
+  let q = s
+    .from("lecturas_agua")
+    .select("periodo_id, dpto_id, lectura_anterior, lectura_actual")
+    .in("periodo_id", ids)
+    .order("periodo_id")
+    .order("dpto_id");
+  if (o.dpto != null) q = q.eq("dpto_id", o.dpto);
+  const { data } = await q;
+
+  return {
+    nombre: "Consumo de agua",
+    columnas: [
+      { encabezado: "Periodo", clave: "periodo", tipo: "texto" },
+      { encabezado: "Dpto", clave: "dpto_id", tipo: "entero" },
+      { encabezado: "Lectura anterior", clave: "lectura_anterior", tipo: "entero" },
+      { encabezado: "Lectura actual", clave: "lectura_actual", tipo: "entero" },
+      { encabezado: "m³", clave: "m3", tipo: "entero" },
+    ],
+    filas: (data ?? []).map((l) => ({
+      periodo: etiqueta.get(l.periodo_id) ?? "",
+      dpto_id: l.dpto_id,
+      lectura_anterior: l.lectura_anterior,
+      lectura_actual: l.lectura_actual,
+      m3: l.lectura_actual - l.lectura_anterior,
+    })),
+  };
+}
+
+// Arma todas las hojas pedidas, en orden estable. `client` permite usar el
+// cliente anónimo (export público); sin él, el de sesión.
+export async function armarHojas(
+  o: OpcionesExport,
+  client?: ClienteDatos,
+): Promise<HojaExcel[]> {
+  const s = client ?? createClient();
   const periodos = await resolverPeriodos(s, o);
 
   const hojas: HojaExcel[] = [];
@@ -274,6 +329,7 @@ export async function armarHojas(o: OpcionesExport): Promise<HojaExcel[]> {
     else if (tipo === "egresos") h = await hojaEgresos(s, periodos, o);
     else if (tipo === "estado") h = await hojaEstadoCuenta(s, periodos, o);
     else if (tipo === "caja") h = hojaCaja(periodos);
+    else if (tipo === "consumo") h = await hojaConsumo(s, periodos, o);
     if (h) hojas.push(h);
   }
   return hojas;
