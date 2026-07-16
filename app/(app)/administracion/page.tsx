@@ -31,7 +31,7 @@ const HERRAMIENTAS: Herramienta[] = [
     titulo: "Usuarios y roles",
     desc: "Cambiar quién es admin, tesorería o portería, y gestionar residentes.",
     icono: "usuarios",
-    activo: false,
+    activo: true,
   },
   {
     href: "/bitacora",

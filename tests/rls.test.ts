@@ -358,6 +358,51 @@ describe("RLS por rol (flujo real del mes)", () => {
     expect(audit.rows[0]!.n).toBeGreaterThanOrEqual(1);
   });
 
+  it("usuarios y padrón: solo admin cambia roles y gestiona residentes (4.5)", async () => {
+    // Admin hace un traspaso de cargo (portería→tesorería) y lo revierte.
+    await actuarComo(db, UID.admin);
+    await db.query(`update perfiles set rol = 'tesoreria' where user_id = $1`, [
+      UID.porteria,
+    ]);
+    let r = await db.query<{ rol: string }>(
+      `select rol from perfiles where user_id = $1`,
+      [UID.porteria],
+    );
+    expect(r.rows[0]!.rol).toBe("tesoreria");
+    await db.query(`update perfiles set rol = 'porteria' where user_id = $1`, [
+      UID.porteria,
+    ]);
+    // Admin agrega un residente al padrón.
+    const ins = await db.query<{ id: number }>(
+      `insert into residentes (dpto_id, nombre) values (101, 'Familia 101') returning id`,
+    );
+    expect(ins.rows[0]!.id).toBeGreaterThan(0);
+    await actuarComoServidor(db);
+
+    // Tesorería NO cambia roles (adm_perfiles es admin): el UPDATE no afecta filas.
+    await actuarComo(db, UID.tesoreria);
+    await db.query(`update perfiles set rol = 'admin' where user_id = $1`, [
+      UID.porteria,
+    ]);
+    // Tesorería NO gestiona el padrón (w_residentes es admin).
+    await expect(
+      db.query(`insert into residentes (dpto_id, nombre) values (102, 'X')`),
+    ).rejects.toThrow(/row-level security/);
+    await actuarComoServidor(db);
+
+    r = await db.query<{ rol: string }>(
+      `select rol from perfiles where user_id = $1`,
+      [UID.porteria],
+    );
+    expect(r.rows[0]!.rol).toBe("porteria"); // sin cambio
+
+    // El traspaso de cargo del admin quedó en la bitácora.
+    const audit = await db.query<{ n: number }>(
+      `select count(*)::int as n from audit_log where tabla = 'perfiles' and accion = 'UPDATE'`,
+    );
+    expect(audit.rows[0]!.n).toBeGreaterThanOrEqual(1);
+  });
+
   it("la bitácora solo la lee admin (portería ve 0 filas)", async () => {
     await actuarComo(db, UID.porteria);
     const comoPorteria = await db.query<{ n: number }>(
