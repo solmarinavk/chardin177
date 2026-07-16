@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import type { Tables } from "@/lib/database.types";
 import type { Periodo } from "@/lib/periodos";
+import { prorratear } from "@/lib/centimos";
 
 export type Egreso = Tables<"egresos">;
 export type CategoriaEgreso = Tables<"categorias_egreso">;
@@ -214,6 +215,91 @@ export async function getConsumo6Meses(): Promise<ConsumoDpto[]> {
         .map((p) => ({ anio: p.anio, mes: p.mes, m3: porPeriodo.get(p.id)! })),
     }))
     .sort((a, b) => a.dpto - b.dpto);
+}
+
+// ---------- Conciliación de agua (3.3, el "Cuadre Agua") ----------
+export type Conciliacion = Tables<"conciliaciones_agua">;
+
+export type ConciliacionPreview = {
+  periodos: { id: number; anio: number; mes: number }[];
+  cobradoCent: number; // Σ recibos de agua del rango (lo distribuido)
+  facturadoRealCent: number; // total real Sedapal del rango (input manual)
+  diferenciaCent: number; // facturado − cobrado (+ = faltó cobrar)
+  porDpto: { dpto: number; consumoM3: number; ajusteCent: number }[];
+};
+
+// Calcula el cuadre: compara lo cobrado por agua en un rango de periodos contra
+// el total real de Sedapal, y prorratea la diferencia por consumo (Δm3).
+export async function getConciliacionPreview(
+  desdeId: number,
+  hastaId: number,
+  facturadoRealCent: number,
+): Promise<ConciliacionPreview | null> {
+  const s = createClient();
+  const { data: extremos } = await s
+    .from("periodos")
+    .select("id, anio, mes")
+    .in("id", [desdeId, hastaId]);
+  if (!extremos || extremos.length === 0) return null;
+  const ordenes = extremos.map((p) => p.anio * 12 + p.mes);
+  const min = Math.min(...ordenes);
+  const max = Math.max(...ordenes);
+
+  const { data: todos } = await s
+    .from("periodos")
+    .select("id, anio, mes, estado");
+  const enRango = (todos ?? []).filter((p) => {
+    const o = p.anio * 12 + p.mes;
+    return o >= min && o <= max && (p.estado === "emitido" || p.estado === "cerrado");
+  });
+  const ids = enRango.map((p) => p.id);
+  if (ids.length === 0) return null;
+
+  const { data: recibos } = await s
+    .from("recibos_servicios")
+    .select("monto_cent, tipo, periodo_id")
+    .eq("tipo", "agua")
+    .in("periodo_id", ids);
+  const cobrado = (recibos ?? []).reduce((a, r) => a + r.monto_cent, 0);
+
+  const { data: lecturas } = await s
+    .from("lecturas_agua")
+    .select("dpto_id, lectura_anterior, lectura_actual")
+    .in("periodo_id", ids);
+  const consumo = new Map<number, number>();
+  for (const l of lecturas ?? [])
+    consumo.set(
+      l.dpto_id,
+      (consumo.get(l.dpto_id) ?? 0) + (l.lectura_actual - l.lectura_anterior),
+    );
+  const dptos = [...consumo.keys()].sort((a, b) => a - b);
+  const pesos = dptos.map((d) => consumo.get(d)!);
+
+  const diferencia = facturadoRealCent - cobrado;
+  const ajustes = prorratear(diferencia, pesos);
+
+  return {
+    periodos: enRango
+      .sort((a, b) => a.anio * 12 + a.mes - (b.anio * 12 + b.mes))
+      .map((p) => ({ id: p.id, anio: p.anio, mes: p.mes })),
+    cobradoCent: cobrado,
+    facturadoRealCent,
+    diferenciaCent: diferencia,
+    porDpto: dptos.map((d, i) => ({
+      dpto: d,
+      consumoM3: consumo.get(d)!,
+      ajusteCent: ajustes[i] ?? 0,
+    })),
+  };
+}
+
+export async function getConciliaciones(): Promise<Conciliacion[]> {
+  const s = createClient();
+  const { data } = await s
+    .from("conciliaciones_agua")
+    .select("*")
+    .order("id", { ascending: false });
+  return data ?? [];
 }
 
 // ---------- Provisiones (saldo acumulado, para el dashboard) ----------

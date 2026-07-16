@@ -254,6 +254,30 @@ describe("ciclo de vida del periodo", () => {
     await db.close();
   }, 60000);
 
+  it("un ajuste de conciliación entra como ajuste_cent, no como extra (3.3)", async () => {
+    const db = await crearDbConSchema();
+    const julioId = await sembrarBorrador(db, julio, 2026, 7);
+    // Ajuste de cuadre de agua: +150 al 101, −80 al 502.
+    await db.query(
+      `insert into ajustes (periodo_id, dpto_id, concepto, monto_cent, origen)
+       values ($1, 101, 'Cuadre agua', 15000, 'conciliacion_agua'),
+              ($1, 502, 'Cuadre agua', -8000, 'conciliacion_agua')`,
+      [julioId],
+    );
+    await db.query(`select generar_cuotas($1)`, [julioId]);
+    const filas = await db.query<{ dpto_id: number; ajuste_cent: number; extra_cent: number }>(
+      `select dpto_id, ajuste_cent::int as ajuste_cent, extra_cent::int as extra_cent
+       from cuotas where periodo_id = $1 and dpto_id in (101, 502) order by dpto_id`,
+      [julioId],
+    );
+    const c101 = filas.rows.find((r) => r.dpto_id === 101)!;
+    const c502 = filas.rows.find((r) => r.dpto_id === 502)!;
+    expect(c101.ajuste_cent).toBe(15000);
+    expect(c101.extra_cent).toBe(0);
+    expect(c502.ajuste_cent).toBe(-8000);
+    await db.close();
+  }, 60000);
+
   it("al cerrar el mes se acumula el aporte de cada provisión activa (3.1)", async () => {
     const db = await crearDbConSchema();
     const junioId = await sembrarBorrador(db, junio, 2026, 6);
