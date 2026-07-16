@@ -6,7 +6,8 @@ import { pasosDelMes, pasoActual } from "@/lib/flujo";
 import { etiquetaPeriodo, formatoFecha, hoyLima } from "@/lib/fechas";
 import { formatoPEN } from "@/lib/centimos";
 import { Progreso } from "@/components/Progreso";
-import { SemaforoMini } from "@/components/Semaforo";
+import { Edificio } from "@/components/Edificio";
+import { mapaEdificio } from "@/lib/edificio";
 import { EstadoPeriodoBadge } from "@/components/estados";
 import { ICONOS, IconoFlecha, IconoGota } from "@/components/iconos";
 
@@ -170,8 +171,14 @@ export default async function InicioPage() {
                   etiqueta="Recaudación del mes"
                 />
               </div>
-              <div className="mt-3">
-                <SemaforoMini cuotas={resumen.cuotas} />
+              <div className="mt-4">
+                <Edificio
+                  deptos={mapaEdificio(resumen.cuotas, resumen.pagadoPorCuota)}
+                  pagarBase={`/periodos/${resumen.periodo.id}`}
+                />
+                <p className="mt-2 text-center text-xs text-slate-500">
+                  Toca un dpto en ámbar o rojo para registrarle el pago.
+                </p>
               </div>
             </div>
           )}

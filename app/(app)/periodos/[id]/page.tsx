@@ -59,11 +59,16 @@ export const metadata: Metadata = { title: "Periodo" };
 
 export default async function PeriodoDetallePage({
   params,
+  searchParams,
 }: {
   params: { id: string };
+  searchParams: { pagar?: string };
 }) {
   const id = Number(params.id);
   if (!Number.isInteger(id)) notFound();
+  // 5.4a · Pago en un toque: ?pagar=301 llega desde el edificio del inicio y
+  // abre directo el formulario de ese dpto (monto y fecha ya precargados).
+  const pagarDpto = Number(searchParams.pagar);
 
   // Portería solo usa el módulo de lecturas (PROPUESTA §5); los datos
   // financieros del periodo son para tesorería y admin. Los vecinos ven el
@@ -288,7 +293,7 @@ export default async function PeriodoDetallePage({
 
           {/* Registrar pagos */}
           {gestiona && periodo.estado === "emitido" && (
-            <PagosSection resumen={resumen} periodoId={id} />
+            <PagosSection resumen={resumen} periodoId={id} pagarDpto={pagarDpto} />
           )}
 
           {/* Cerrar el mes (2.3) */}
@@ -521,9 +526,11 @@ async function DerramaSection({ periodoId }: { periodoId: number }) {
 async function PagosSection({
   resumen,
   periodoId,
+  pagarDpto,
 }: {
   resumen: ResumenPeriodo;
   periodoId: number;
+  pagarDpto?: number;
 }) {
   const hoy = hoyLima();
   const [pagosPorCuota, constancias] = await Promise.all([
@@ -621,8 +628,15 @@ async function PagosSection({
           const pagadoCent = resumen.pagadoPorCuota.get(c.id) ?? 0;
           const saldo = c.total_cent - pagadoCent;
           const pagos = pagosPorCuota.get(c.id) ?? [];
+          const abrirPago = pagarDpto === c.dpto_id && saldo > 0;
           return (
-            <li key={c.id} className="rounded-xl border border-slate-200 p-3">
+            <li
+              key={c.id}
+              id={`dpto-${c.dpto_id}`}
+              className={`scroll-mt-24 rounded-xl border p-3 ${
+                abrirPago ? "border-slate-900 ring-2 ring-slate-900/10" : "border-slate-200"
+              }`}
+            >
               <div className="flex items-center justify-between gap-2">
                 <span className="font-bold text-slate-900">Dpto {c.dpto_id}</span>
                 <span className="num text-sm text-slate-600">
@@ -672,7 +686,7 @@ async function PagosSection({
                   Pagado
                 </p>
               ) : (
-                <details className="group">
+                <details className="group" open={abrirPago}>
                   <summary className="mt-1 flex cursor-pointer list-none items-center gap-1 text-sm font-semibold text-slate-700 hover:text-slate-900">
                     <IconoFlecha className="h-3.5 w-3.5 transition-transform group-open:rotate-90" />
                     Registrar pago

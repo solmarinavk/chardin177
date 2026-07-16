@@ -8,7 +8,8 @@ import {
   mesesDesde,
   textoAntiguedad,
 } from "@/lib/fechas";
-import { Semaforo } from "@/components/Semaforo";
+import { Edificio } from "@/components/Edificio";
+import { mapaEdificio } from "@/lib/edificio";
 import { ConsumoAgua } from "@/components/ConsumoAgua";
 import { Progreso } from "@/components/Progreso";
 import { IconoAlerta, IconoFlecha, IconoCandado } from "@/components/iconos";
@@ -164,10 +165,12 @@ export default async function TransparenciaPage() {
               </div>
             </div>
 
-            <Semaforo
-              cuotas={d.semaforo.cuotas}
-              pagadoPorCuota={d.semaforo.pagadoPorCuota}
+            <Edificio
+              deptos={mapaEdificio(d.semaforo.cuotas, d.semaforo.pagadoPorCuota)}
             />
+            <p className="mt-3 text-center text-xs text-slate-500">
+              Toca una ventana para ver el detalle del departamento.
+            </p>
           </section>
         )}
 
