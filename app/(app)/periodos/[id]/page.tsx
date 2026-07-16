@@ -323,6 +323,26 @@ export default async function PeriodoDetallePage({
             )}
           </section>
 
+          {/* Recibos por dpto (3.4) */}
+          <section className="card animar-aparecer p-5">
+            <h2 className="titulo-seccion mb-3">Recibos por departamento</h2>
+            <ul className="grid grid-cols-3 gap-2 sm:grid-cols-5">
+              {resumen.cuotas.map((c) => (
+                <li key={c.dpto_id}>
+                  <Link
+                    href={`/periodos/${id}/recibo/${c.dpto_id}`}
+                    className="flex items-center justify-center rounded-xl border border-slate-200 py-2.5 font-bold text-slate-800 hover:bg-slate-50"
+                  >
+                    {c.dpto_id}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+            <p className="mt-2 text-xs text-slate-500">
+              Abre el recibo de un dpto para compartirlo por WhatsApp o imprimirlo.
+            </p>
+          </section>
+
           {periodo.estado === "cerrado" && (
             <section className="card animar-aparecer p-5">
               <h2 className="titulo-seccion mb-3">Caja del mes</h2>

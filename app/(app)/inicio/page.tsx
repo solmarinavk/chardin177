@@ -405,6 +405,13 @@ function ResidenteInicio({
                   </span>
                 </p>
               )}
+              <Link
+                href={`/periodos/${periodo.id}/recibo/${miCuota.dpto_id}`}
+                className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-slate-700 hover:text-slate-900"
+              >
+                Ver / compartir mi recibo
+                <IconoFlecha className="h-4 w-4" />
+              </Link>
             </div>
           )}
 
