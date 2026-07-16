@@ -40,3 +40,6 @@ next-env.d.ts
 # supabase local
 /supabase/.branches
 /supabase/.temp
+
+# SQL generado por la migración histórica (datos reales, no versionar)
+historico_generado.sql

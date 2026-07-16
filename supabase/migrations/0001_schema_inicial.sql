@@ -126,9 +126,6 @@ create table pagos (
   medio medio_pago not null default 'transferencia',
   comprobante_url text,
   nota text,
-  -- Cierre de caja que recogió este pago (NULL = aún en el mes abierto).
-  -- Lo fija cerrar_periodo(); un pago contabilizado es inmutable.
-  contabilizado_en_periodo bigint references periodos(id),
   registrado_por uuid references auth.users(id),
   registrado_en timestamptz not null default now()
 );
@@ -185,23 +182,6 @@ create table documentos (
   url text not null,
   subido_por uuid references auth.users(id),
   creado_en timestamptz not null default now()
-);
-
--- Constancia de pago del vecino (opcional), confirmada por tesorería (3.7)
-create table constancias_pago (
-  id bigint generated always as identity primary key,
-  periodo_id bigint not null references periodos(id),
-  dpto_id smallint not null references departamentos(id),
-  monto_cent integer check (monto_cent is null or monto_cent > 0),
-  foto_url text,
-  nota text,
-  estado text not null default 'pendiente'
-    check (estado in ('pendiente','confirmada','rechazada')),
-  creado_por uuid references auth.users(id),
-  creado_en timestamptz not null default now(),
-  resuelto_por uuid references auth.users(id),
-  resuelto_en timestamptz,
-  pago_id bigint references pagos(id)
 );
 
 create table audit_log (
@@ -325,36 +305,23 @@ begin
    where id = p_periodo and estado='borrador';
 end $$;
 
--- Cerrar: caja por fecha de cobro (como una caja real). Suma TODOS los pagos
--- aún no contabilizados (del mes o atrasados de meses ya cerrados), fija el
--- saldo final, marca esos pagos con este cierre y abre el mes siguiente con
--- el saldo arrastrado.
+-- Cerrar: fija saldos y abre el siguiente
 create or replace function cerrar_periodo(p_periodo bigint)
-returns bigint language plpgsql security definer set search_path = public as $$
+returns bigint language plpgsql security definer as $$
 declare
   v_ing integer; v_egr integer; v_ini integer; v_fin integer;
   v_anio smallint; v_mes smallint; v_next bigint;
 begin
-  select coalesce(saldo_inicial_cent, 0), anio, mes into v_ini, v_anio, v_mes
+  select saldo_inicial_cent, anio, mes into v_ini, v_anio, v_mes
     from periodos where id = p_periodo and estado='emitido';
   if not found then raise exception 'El periodo debe estar emitido'; end if;
 
-  select coalesce(sum(monto_cent),0) into v_ing
-    from pagos where contabilizado_en_periodo is null;
+  select coalesce(sum(p.monto_cent),0) into v_ing
+    from pagos p join cuotas c on c.id=p.cuota_id where c.periodo_id = p_periodo;
   select coalesce(sum(monto_cent),0) into v_egr
     from egresos where periodo_id = p_periodo and pagado;
 
-  v_fin := v_ini + v_ing - v_egr;
-
-  update pagos set contabilizado_en_periodo = p_periodo
-   where contabilizado_en_periodo is null;
-
-  -- Aporte mensual automático a las provisiones activas (memo, no toca caja).
-  insert into movimientos_provision (provision_id, periodo_id, monto_cent, concepto)
-  select id, p_periodo, aporte_mensual_cent, 'Aporte mensual automático'
-    from provisiones
-   where activo and aporte_mensual_cent > 0;
-
+  v_fin := coalesce(v_ini,0) + v_ing - v_egr;
   update periodos set estado='cerrado', cerrado_en=now(), saldo_final_cent=v_fin
    where id = p_periodo;
 
@@ -365,20 +332,17 @@ begin
   return v_next;
 end $$;
 
--- Recalcular estado de cuota tras cada pago.
--- SECURITY DEFINER: cuotas no tiene política de escritura (solo el motor);
--- sin esto, el trigger fallaría con los permisos del usuario que paga.
-create or replace function fn_actualiza_estado_cuota() returns trigger
-language plpgsql security definer set search_path = public as $$
+-- Recalcular estado de cuota tras cada pago
+create or replace function fn_actualiza_estado_cuota() returns trigger language plpgsql as $$
 declare v_pagado integer; v_total integer; v_cuota bigint;
 begin
   v_cuota := coalesce(new.cuota_id, old.cuota_id);
   select total_cent into v_total from cuotas where id = v_cuota;
   select coalesce(sum(monto_cent),0) into v_pagado from pagos where cuota_id = v_cuota;
-  update cuotas set estado = (case
+  update cuotas set estado = case
       when v_pagado = 0 then 'pendiente'
       when v_pagado < v_total then 'parcial'
-      else 'pagado' end)::estado_cuota
+      else 'pagado' end
    where id = v_cuota;
   return null;
 end $$;
@@ -386,10 +350,7 @@ create trigger tg_pagos_estado after insert or update or delete on pagos
   for each row execute function fn_actualiza_estado_cuota();
 
 -- ---------- Auditoría ----------
--- SECURITY DEFINER: audit_log no tiene política de INSERT (nadie escribe
--- directo); el trigger necesita privilegios propios para dejar la bitácora.
-create or replace function fn_audit() returns trigger
-language plpgsql security definer set search_path = public as $$
+create or replace function fn_audit() returns trigger language plpgsql as $$
 begin
   insert into audit_log (tabla, registro_id, accion, usuario, antes, despues)
   values (tg_table_name,
@@ -424,48 +385,9 @@ create trigger tg_lock_lecturas before insert or update or delete on lecturas_ag
 create trigger tg_lock_recibos before insert or update or delete on recibos_servicios
   for each row execute function fn_bloquea_emitido();
 
--- Un pago que ya entró a un cierre de caja es inmutable (correcciones: ajuste
--- del periodo siguiente).
-create or replace function fn_bloquea_pago_contabilizado()
-returns trigger language plpgsql as $$
-begin
-  if old.contabilizado_en_periodo is not null then
-    raise exception 'Este pago ya entró al cierre de caja de un mes: no se puede modificar ni anular. Registra un ajuste en el periodo siguiente.';
-  end if;
-  return coalesce(new, old);
-end $$;
-create trigger tg_lock_pagos_contabilizados
-  before update or delete on pagos
-  for each row execute function fn_bloquea_pago_contabilizado();
-
--- Los egresos de un periodo cerrado son inmutables (su caja ya cuadró).
-create or replace function fn_bloquea_egreso_cerrado()
-returns trigger language plpgsql as $$
-declare v_estado estado_periodo;
-begin
-  select estado into v_estado from periodos
-   where id = coalesce(new.periodo_id, old.periodo_id);
-  if v_estado = 'cerrado' then
-    raise exception 'El periodo ya está cerrado y su caja cuadrada: registra el egreso en el mes abierto.';
-  end if;
-  if tg_op = 'UPDATE' and new.periodo_id is distinct from old.periodo_id then
-    select estado into v_estado from periodos where id = new.periodo_id;
-    if v_estado = 'cerrado' then
-      raise exception 'No se puede mover un egreso a un periodo cerrado.';
-    end if;
-  end if;
-  return coalesce(new, old);
-end $$;
-create trigger tg_lock_egresos_cerrado
-  before insert or update or delete on egresos
-  for each row execute function fn_bloquea_egreso_cerrado();
-
 -- ---------- RLS ----------
--- Helper de rol. SECURITY DEFINER es OBLIGATORIO: las políticas de `perfiles`
--- llaman a mi_rol(), que lee `perfiles`; sin definer eso es recursión infinita
--- ("stack depth limit exceeded") en cualquier escritura protegida por rol.
-create or replace function mi_rol() returns rol_usuario
-language sql stable security definer set search_path = public as
+-- Helper de rol
+create or replace function mi_rol() returns rol_usuario language sql stable as
 $$ select rol from perfiles where user_id = auth.uid() $$;
 
 alter table departamentos enable row level security;
@@ -496,31 +418,6 @@ begin
     execute format('create policy sel_%I on %I for select to authenticated using (true)', t, t);
   end loop;
 end $$;
-
--- Transparencia PÚBLICA: el rol anon (sin login) LEE las tablas de transparencia
--- (todas menos residentes, que tiene datos personales). Ver migración 0008.
-grant select on
-  departamentos, periodos, cuotas, pagos, recibos_servicios, lecturas_agua,
-  egresos, categorias_egreso, provisiones, movimientos_provision, ajustes,
-  cuotas_fijas, conciliaciones_agua, documentos
-to anon;
-do $$ declare t text;
-begin
-  foreach t in array array['departamentos','periodos','cuotas','pagos',
-    'recibos_servicios','lecturas_agua','egresos','categorias_egreso',
-    'provisiones','movimientos_provision','ajustes','cuotas_fijas',
-    'conciliaciones_agua','documentos']
-  loop
-    execute format('create policy pub_%I on %I for select to anon using (true)', t, t);
-  end loop;
-end $$;
-
--- El público NO ejecuta el motor/emisión/cierre (funciones SECURITY DEFINER).
-revoke execute on function generar_cuotas(bigint) from public, anon;
-revoke execute on function emitir_periodo(bigint) from public, anon;
-revoke execute on function cerrar_periodo(bigint) from public, anon;
-grant execute on function generar_cuotas(bigint), emitir_periodo(bigint), cerrar_periodo(bigint)
-  to authenticated, service_role;
 
 -- Perfiles: cada quien ve el suyo, admin ve y edita todos
 create policy sel_perfiles on perfiles for select to authenticated
@@ -562,19 +459,3 @@ create policy w_prov on provisiones for all to authenticated
 
 -- audit_log: solo admin lee; nadie escribe directo (lo hacen los triggers)
 create policy sel_audit on audit_log for select to authenticated using (mi_rol() = 'admin');
-
--- constancias_pago: el residente ve/crea las suyas; tesorería/admin ven todas
--- y confirman/rechazan (3.7).
-alter table constancias_pago enable row level security;
-create policy sel_constancias on constancias_pago for select to authenticated
-  using (creado_por = auth.uid() or mi_rol() in ('tesoreria','admin'));
-create policy ins_constancias on constancias_pago for insert to authenticated
-  with check (creado_por = auth.uid() and mi_rol() in ('residente','tesoreria','admin'));
-create policy upd_constancias on constancias_pago for update to authenticated
-  using (mi_rol() in ('tesoreria','admin')) with check (mi_rol() in ('tesoreria','admin'));
-create trigger tg_audit_constancias after insert or update or delete on constancias_pago
-  for each row execute function fn_audit();
-
--- NOTA Storage: las políticas de los buckets (comprobantes, medidores,
--- documentos) viven en supabase/migrations/0004_storage_policies.sql porque el
--- esquema `storage` solo existe en Supabase (no en la base de tests).

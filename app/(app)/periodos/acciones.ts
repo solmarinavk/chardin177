@@ -1,0 +1,354 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
+import { requireRol } from "@/lib/roles";
+import {
+  centimosDesdeInput,
+  enteroDesdeInput,
+  type EstadoForm,
+} from "@/lib/formularios";
+import {
+  BUCKET_COMPROBANTES,
+  archivoConContenido,
+  subirFoto,
+} from "@/lib/storage";
+import { notificarEmision } from "@/lib/notificaciones";
+import type { MedioPago, TipoRecibo } from "@/lib/database.types";
+
+const TESORERIA: ("tesoreria" | "admin")[] = ["tesoreria", "admin"];
+
+function mensajeError(error: { code?: string; message: string }): string {
+  if (error.code === "42501") return "No tienes permiso para esta acción.";
+  return error.message;
+}
+
+// 1.1 · Crear un periodo (solo puede haber un borrador a la vez, lo garantiza la DB).
+export async function crearPeriodo(
+  _prev: EstadoForm,
+  formData: FormData,
+): Promise<EstadoForm> {
+  await requireRol(TESORERIA);
+  const anio = enteroDesdeInput(formData.get("anio"));
+  const mes = enteroDesdeInput(formData.get("mes"));
+  if (anio === null || anio < 2020 || anio > 2100)
+    return { ok: false, error: "Año inválido." };
+  if (mes === null || mes < 1 || mes > 12)
+    return { ok: false, error: "Mes inválido (1 a 12)." };
+
+  const s = createClient();
+  const { data, error } = await s
+    .from("periodos")
+    .insert({ anio, mes, estado: "borrador" })
+    .select("id")
+    .single();
+
+  if (error) {
+    if (error.code === "23505")
+      return {
+        ok: false,
+        error:
+          "Ya existe un periodo en borrador, o ese mes ya fue creado. Emite o cierra el borrador actual antes de crear otro.",
+      };
+    return { ok: false, error: mensajeError(error) };
+  }
+
+  revalidatePath("/periodos");
+  redirect(`/periodos/${data.id}`);
+}
+
+// 1.3 · Guardar el monto de un recibo (agua o luz) del periodo, con foto opcional.
+export async function guardarRecibo(
+  _prev: EstadoForm,
+  formData: FormData,
+): Promise<EstadoForm> {
+  await requireRol(TESORERIA);
+  const periodoId = enteroDesdeInput(formData.get("periodo_id"));
+  const tipoRaw = String(formData.get("tipo") ?? "");
+  const monto = centimosDesdeInput(formData.get("monto"));
+  if (periodoId === null) return { ok: false, error: "Periodo inválido." };
+  if (tipoRaw !== "agua" && tipoRaw !== "luz")
+    return { ok: false, error: "Tipo de recibo inválido." };
+  if (monto === null) return { ok: false, error: "Monto inválido." };
+  const tipo = tipoRaw as TipoRecibo;
+
+  const s = createClient();
+
+  let foto_url: string | undefined;
+  const archivo = archivoConContenido(formData.get("foto"));
+  if (archivo) {
+    const res = await subirFoto(
+      BUCKET_COMPROBANTES,
+      `recibo-${tipo}-periodo-${periodoId}`,
+      archivo,
+    );
+    if ("error" in res)
+      return { ok: false, error: `No se pudo subir la foto: ${res.error}` };
+    foto_url = res.ruta;
+  }
+
+  const { error } = await s.from("recibos_servicios").upsert(
+    {
+      periodo_id: periodoId,
+      tipo,
+      monto_cent: monto,
+      ...(foto_url ? { foto_url } : {}),
+    },
+    { onConflict: "periodo_id,tipo" },
+  );
+  if (error) return { ok: false, error: mensajeError(error) };
+
+  revalidatePath(`/periodos/${periodoId}`);
+  return { ok: true, error: null, mensaje: `Recibo de ${tipo} guardado.` };
+}
+
+// 1.4 · Calcular las cuotas (motor en Postgres). Solo en borrador.
+export async function generarCuotas(
+  _prev: EstadoForm,
+  formData: FormData,
+): Promise<EstadoForm> {
+  await requireRol(TESORERIA);
+  const periodoId = enteroDesdeInput(formData.get("periodo_id"));
+  if (periodoId === null) return { ok: false, error: "Periodo inválido." };
+
+  const s = createClient();
+  const { error } = await s.rpc("generar_cuotas", { p_periodo: periodoId });
+  if (error) return { ok: false, error: mensajeError(error) };
+
+  revalidatePath(`/periodos/${periodoId}`);
+  return { ok: true, error: null, mensaje: "Cuotas calculadas. Revisa el borrador." };
+}
+
+// 1.6 · Emitir el periodo (congela las cuotas, inmutable en adelante).
+export async function emitirPeriodo(
+  _prev: EstadoForm,
+  formData: FormData,
+): Promise<EstadoForm> {
+  await requireRol(TESORERIA);
+  const periodoId = enteroDesdeInput(formData.get("periodo_id"));
+  if (periodoId === null) return { ok: false, error: "Periodo inválido." };
+
+  const s = createClient();
+  const { error } = await s.rpc("emitir_periodo", { p_periodo: periodoId });
+  if (error) return { ok: false, error: mensajeError(error) };
+
+  // 3.5 · Notifica a los residentes (best-effort: nunca hace fallar la emisión).
+  let notif = "";
+  try {
+    const { enviados } = await notificarEmision(periodoId);
+    if (enviados > 0) notif = ` Se notificó a ${enviados} residente(s) por correo.`;
+  } catch {
+    // Si el correo falla, la emisión ya quedó hecha; no se interrumpe.
+  }
+
+  revalidatePath(`/periodos/${periodoId}`);
+  return { ok: true, error: null, mensaje: `Periodo emitido.${notif}` };
+}
+
+// 1.7 · Registrar un pago de una cuota (soporta pago parcial), con comprobante opcional.
+export async function registrarPago(
+  _prev: EstadoForm,
+  formData: FormData,
+): Promise<EstadoForm> {
+  await requireRol(TESORERIA);
+  const cuotaId = enteroDesdeInput(formData.get("cuota_id"));
+  const periodoId = enteroDesdeInput(formData.get("periodo_id"));
+  const monto = centimosDesdeInput(formData.get("monto"));
+  const fecha = String(formData.get("fecha") ?? "");
+  const medioRaw = String(formData.get("medio") ?? "transferencia");
+  const nota = String(formData.get("nota") ?? "").trim() || null;
+
+  if (cuotaId === null) return { ok: false, error: "Cuota inválida." };
+  if (monto === null || monto <= 0)
+    return { ok: false, error: "El monto debe ser mayor a S/ 0." };
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha))
+    return { ok: false, error: "Fecha inválida." };
+  const medios: MedioPago[] = ["yape", "plin", "transferencia", "efectivo", "otro"];
+  if (!medios.includes(medioRaw as MedioPago))
+    return { ok: false, error: "Medio de pago inválido." };
+  const medio = medioRaw as MedioPago;
+
+  const s = createClient();
+
+  let comprobante_url: string | undefined;
+  const archivo = archivoConContenido(formData.get("comprobante"));
+  if (archivo) {
+    const res = await subirFoto(
+      BUCKET_COMPROBANTES,
+      `pago-cuota-${cuotaId}`,
+      archivo,
+    );
+    if ("error" in res)
+      return { ok: false, error: `No se pudo subir el comprobante: ${res.error}` };
+    comprobante_url = res.ruta;
+  }
+
+  const { error } = await s.from("pagos").insert({
+    cuota_id: cuotaId,
+    monto_cent: monto,
+    fecha_pago: fecha,
+    medio,
+    nota,
+    ...(comprobante_url ? { comprobante_url } : {}),
+  });
+  if (error) return { ok: false, error: mensajeError(error) };
+
+  if (periodoId !== null) revalidatePath(`/periodos/${periodoId}`);
+  return { ok: true, error: null, mensaje: "Pago registrado." };
+}
+
+// 3.2 · Crear una cuota extraordinaria (derrama) en el borrador: se guarda como
+// ajustes con origen='cuota_extra' y el motor la suma como EXTRA al recalcular.
+export async function crearDerrama(
+  _prev: EstadoForm,
+  formData: FormData,
+): Promise<EstadoForm> {
+  await requireRol(TESORERIA);
+  const periodoId = enteroDesdeInput(formData.get("periodo_id"));
+  const concepto = String(formData.get("concepto") ?? "").trim();
+  const modo = String(formData.get("modo") ?? "igual");
+  const dptos = String(formData.get("dptos") ?? "")
+    .split(",")
+    .map((x) => Number(x))
+    .filter((x) => Number.isInteger(x));
+  if (periodoId === null) return { ok: false, error: "Periodo inválido." };
+  if (concepto.length === 0)
+    return { ok: false, error: "Escribe el concepto de la derrama." };
+  if (dptos.length === 0) return { ok: false, error: "No hay departamentos." };
+
+  const s = createClient();
+  const {
+    data: { user },
+  } = await s.auth.getUser();
+
+  type AjusteInsert = {
+    periodo_id: number;
+    dpto_id: number;
+    concepto: string;
+    monto_cent: number;
+    origen: string;
+    creado_por: string | null;
+  };
+  const filas: AjusteInsert[] = [];
+
+  if (modo === "igual") {
+    const monto = centimosDesdeInput(formData.get("monto"));
+    if (monto === null || monto <= 0)
+      return { ok: false, error: "El monto por departamento debe ser mayor a S/ 0." };
+    for (const d of dptos)
+      filas.push({
+        periodo_id: periodoId,
+        dpto_id: d,
+        concepto,
+        monto_cent: monto,
+        origen: "cuota_extra",
+        creado_por: user?.id ?? null,
+      });
+  } else {
+    for (const d of dptos) {
+      const m = centimosDesdeInput(formData.get(`monto_${d}`));
+      if (m === null || m < 0)
+        return { ok: false, error: `Monto inválido en el dpto ${d}.` };
+      if (m > 0)
+        filas.push({
+          periodo_id: periodoId,
+          dpto_id: d,
+          concepto,
+          monto_cent: m,
+          origen: "cuota_extra",
+          creado_por: user?.id ?? null,
+        });
+    }
+    if (filas.length === 0)
+      return { ok: false, error: "Ingresa al menos un monto." };
+  }
+
+  const { error } = await s.from("ajustes").insert(filas);
+  if (error) return { ok: false, error: mensajeError(error) };
+
+  revalidatePath(`/periodos/${periodoId}`);
+  return {
+    ok: true,
+    error: null,
+    mensaje: "Derrama creada. Vuelve a calcular las cuotas para incluirla.",
+  };
+}
+
+// 3.2 · Eliminar una derrama (por concepto) del borrador.
+export async function eliminarDerrama(
+  _prev: EstadoForm,
+  formData: FormData,
+): Promise<EstadoForm> {
+  await requireRol(TESORERIA);
+  const periodoId = enteroDesdeInput(formData.get("periodo_id"));
+  const concepto = String(formData.get("concepto") ?? "");
+  if (periodoId === null) return { ok: false, error: "Periodo inválido." };
+
+  const s = createClient();
+  const { error } = await s
+    .from("ajustes")
+    .delete()
+    .eq("periodo_id", periodoId)
+    .eq("origen", "cuota_extra")
+    .eq("concepto", concepto);
+  if (error) return { ok: false, error: mensajeError(error) };
+
+  revalidatePath(`/periodos/${periodoId}`);
+  return {
+    ok: true,
+    error: null,
+    mensaje: "Derrama eliminada. Vuelve a calcular las cuotas.",
+  };
+}
+
+// 2.3 · Cerrar el mes: cuadra la caja (pagos no contabilizados + egresos
+// pagados), fija el saldo final y abre el mes siguiente con el saldo
+// arrastrado. Las cuotas impagas pasan como deuda a la cuenta corriente.
+export async function cerrarPeriodo(
+  _prev: EstadoForm,
+  formData: FormData,
+): Promise<EstadoForm> {
+  await requireRol(TESORERIA);
+  const periodoId = enteroDesdeInput(formData.get("periodo_id"));
+  if (periodoId === null) return { ok: false, error: "Periodo inválido." };
+
+  const s = createClient();
+  const { error } = await s.rpc("cerrar_periodo", { p_periodo: periodoId });
+  if (error) return { ok: false, error: mensajeError(error) };
+
+  revalidatePath("/periodos");
+  revalidatePath(`/periodos/${periodoId}`);
+  revalidatePath("/caja");
+  revalidatePath("/inicio");
+  return {
+    ok: true,
+    error: null,
+    mensaje:
+      "Mes cerrado. El saldo pasó al mes siguiente, que ya quedó creado en borrador.",
+  };
+}
+
+// 1.7 · Anular un pago mal registrado (error de digitación). El trigger de la
+// base recalcula el estado de la cuota y la anulación queda en audit_log.
+export async function anularPago(
+  _prev: EstadoForm,
+  formData: FormData,
+): Promise<EstadoForm> {
+  await requireRol(TESORERIA);
+  const pagoId = enteroDesdeInput(formData.get("pago_id"));
+  const periodoId = enteroDesdeInput(formData.get("periodo_id"));
+  if (pagoId === null) return { ok: false, error: "Pago inválido." };
+
+  const s = createClient();
+  const { error, count } = await s
+    .from("pagos")
+    .delete({ count: "exact" })
+    .eq("id", pagoId);
+  if (error) return { ok: false, error: mensajeError(error) };
+  if (count === 0)
+    return { ok: false, error: "No se encontró el pago (¿ya fue anulado?)." };
+
+  if (periodoId !== null) revalidatePath(`/periodos/${periodoId}`);
+  return { ok: true, error: null, mensaje: "Pago anulado." };
+}

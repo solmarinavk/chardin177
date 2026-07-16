@@ -1,0 +1,13 @@
+# Deploy de Chardin 177 en Netlify con el plugin oficial de Next.js.
+# Las variables de entorno (NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY,
+# SUPABASE_SERVICE_ROLE_KEY) se configuran en Site configuration → Environment variables,
+# NUNCA en este archivo.
+
+[build]
+  command = "npm run build"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
