@@ -11,6 +11,7 @@ import {
   type ResumenPeriodo,
 } from "@/lib/periodos";
 import { getLibroCaja } from "@/lib/caja";
+import { getConstanciasPendientes } from "@/lib/constancias";
 import { pasosDelMes } from "@/lib/flujo";
 import { etiquetaPeriodo, formatoFecha, hoyLima } from "@/lib/fechas";
 import { formatoPEN } from "@/lib/centimos";
@@ -26,6 +27,14 @@ import { FormPago } from "@/components/forms/pago";
 import { IconoFlecha, IconoCheck, IconoAlerta, IconoGota } from "@/components/iconos";
 import { FormAnularPago } from "@/components/forms/anular-pago";
 import { FormDerrama, FormEliminarDerrama } from "@/components/forms/derrama";
+import {
+  FormConfirmarConstancia,
+  FormRechazarConstancia,
+} from "@/components/forms/constancia";
+import {
+  confirmarConstancia,
+  rechazarConstancia,
+} from "@/app/(app)/constancias/acciones";
 import {
   guardarRecibo,
   generarCuotas,
@@ -517,8 +526,27 @@ async function PagosSection({
   periodoId: number;
 }) {
   const hoy = hoyLima();
-  const pagosPorCuota = await getPagosPorCuota(periodoId);
+  const [pagosPorCuota, constancias] = await Promise.all([
+    getPagosPorCuota(periodoId),
+    getConstanciasPendientes(periodoId),
+  ]);
   const todoPagado = resumen.cuotas.every((c) => c.estado === "pagado");
+
+  // URLs firmadas de las constancias y saldo sugerido por dpto.
+  const urlsConstancia = new Map<number, string>();
+  for (const c of constancias) {
+    if (c.foto_url) {
+      const u = await urlFirmada(BUCKET_COMPROBANTES, c.foto_url);
+      if (u) urlsConstancia.set(c.id, u);
+    }
+  }
+  const saldoDeDpto = new Map<number, number>();
+  for (const c of resumen.cuotas) {
+    saldoDeDpto.set(
+      c.dpto_id,
+      c.total_cent - (resumen.pagadoPorCuota.get(c.id) ?? 0),
+    );
+  }
 
   // URLs firmadas de los comprobantes (los buckets son privados).
   const urlsComprobante = new Map<number, string>();
@@ -534,6 +562,54 @@ async function PagosSection({
   return (
     <section id="pagos" className="card animar-aparecer scroll-mt-24 p-5">
       <h2 className="titulo-seccion mb-3">Cobranza</h2>
+
+      {/* 3.7 · Constancias del vecino por confirmar */}
+      {constancias.length > 0 && (
+        <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+          <p className="mb-2 font-bold text-amber-900">
+            Constancias por confirmar ({constancias.length})
+          </p>
+          <ul className="flex flex-col gap-3">
+            {constancias.map((c) => (
+              <li key={c.id} className="rounded-xl bg-white p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-bold text-slate-900">Dpto {c.dpto_id}</span>
+                  <FormRechazarConstancia
+                    accion={rechazarConstancia}
+                    constanciaId={c.id}
+                    periodoId={periodoId}
+                  />
+                </div>
+                {c.nota && <p className="text-sm text-slate-600">{c.nota}</p>}
+                <div className="mt-1 flex items-center gap-3 text-sm">
+                  {c.monto_cent != null && (
+                    <span className="num text-slate-600">
+                      Dice: {formatoPEN(c.monto_cent)}
+                    </span>
+                  )}
+                  {urlsConstancia.has(c.id) && (
+                    <a
+                      href={urlsConstancia.get(c.id)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="font-semibold text-slate-500 underline underline-offset-2 hover:text-slate-900"
+                    >
+                      Ver constancia
+                    </a>
+                  )}
+                </div>
+                <FormConfirmarConstancia
+                  accion={confirmarConstancia}
+                  constanciaId={c.id}
+                  periodoId={periodoId}
+                  montoSugeridoCent={c.monto_cent ?? saldoDeDpto.get(c.dpto_id) ?? 0}
+                />
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {todoPagado && (
         <p className="mb-3 flex items-center gap-1.5 font-medium text-emerald-700">
           <IconoCheck className="h-5 w-5" />

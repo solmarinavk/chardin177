@@ -467,6 +467,51 @@ export type Database = {
         };
         Relationships: [];
       };
+      constancias_pago: {
+        Row: {
+          id: number;
+          periodo_id: number;
+          dpto_id: number;
+          monto_cent: number | null;
+          foto_url: string | null;
+          nota: string | null;
+          estado: string;
+          creado_por: string | null;
+          creado_en: string;
+          resuelto_por: string | null;
+          resuelto_en: string | null;
+          pago_id: number | null;
+        };
+        Insert: {
+          id?: number;
+          periodo_id: number;
+          dpto_id: number;
+          monto_cent?: number | null;
+          foto_url?: string | null;
+          nota?: string | null;
+          estado?: string;
+          creado_por?: string | null;
+          creado_en?: string;
+          resuelto_por?: string | null;
+          resuelto_en?: string | null;
+          pago_id?: number | null;
+        };
+        Update: {
+          id?: number;
+          periodo_id?: number;
+          dpto_id?: number;
+          monto_cent?: number | null;
+          foto_url?: string | null;
+          nota?: string | null;
+          estado?: string;
+          creado_por?: string | null;
+          creado_en?: string;
+          resuelto_por?: string | null;
+          resuelto_en?: string | null;
+          pago_id?: number | null;
+        };
+        Relationships: [];
+      };
       audit_log: {
         Row: {
           id: number;

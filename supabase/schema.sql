@@ -187,6 +187,23 @@ create table documentos (
   creado_en timestamptz not null default now()
 );
 
+-- Constancia de pago del vecino (opcional), confirmada por tesorería (3.7)
+create table constancias_pago (
+  id bigint generated always as identity primary key,
+  periodo_id bigint not null references periodos(id),
+  dpto_id smallint not null references departamentos(id),
+  monto_cent integer check (monto_cent is null or monto_cent > 0),
+  foto_url text,
+  nota text,
+  estado text not null default 'pendiente'
+    check (estado in ('pendiente','confirmada','rechazada')),
+  creado_por uuid references auth.users(id),
+  creado_en timestamptz not null default now(),
+  resuelto_por uuid references auth.users(id),
+  resuelto_en timestamptz,
+  pago_id bigint references pagos(id)
+);
+
 create table audit_log (
   id bigint generated always as identity primary key,
   tabla text not null,
@@ -520,6 +537,18 @@ create policy w_prov on provisiones for all to authenticated
 
 -- audit_log: solo admin lee; nadie escribe directo (lo hacen los triggers)
 create policy sel_audit on audit_log for select to authenticated using (mi_rol() = 'admin');
+
+-- constancias_pago: el residente ve/crea las suyas; tesorería/admin ven todas
+-- y confirman/rechazan (3.7).
+alter table constancias_pago enable row level security;
+create policy sel_constancias on constancias_pago for select to authenticated
+  using (creado_por = auth.uid() or mi_rol() in ('tesoreria','admin'));
+create policy ins_constancias on constancias_pago for insert to authenticated
+  with check (creado_por = auth.uid() and mi_rol() in ('residente','tesoreria','admin'));
+create policy upd_constancias on constancias_pago for update to authenticated
+  using (mi_rol() in ('tesoreria','admin')) with check (mi_rol() in ('tesoreria','admin'));
+create trigger tg_audit_constancias after insert or update or delete on constancias_pago
+  for each row execute function fn_audit();
 
 -- NOTA Storage: las políticas de los buckets (comprobantes, medidores,
 -- documentos) viven en supabase/migrations/0004_storage_policies.sql porque el

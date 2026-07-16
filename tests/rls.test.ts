@@ -232,6 +232,51 @@ describe("RLS por rol (flujo real del mes)", () => {
     expect(estado.rows[0]!.estado).toBe("pendiente");
   });
 
+  it("constancias: el residente sube la suya, no a nombre de otro; solo tesorería confirma (3.7)", async () => {
+    // El residente sube su propia constancia (creado_por = su uid) → OK.
+    await actuarComo(db, UID.residente);
+    const ins = await db.query<{ id: number }>(
+      `insert into constancias_pago (periodo_id, dpto_id, monto_cent, creado_por)
+       values ($1, 101, 45813, $2) returning id`,
+      [periodoId, UID.residente],
+    );
+    const constanciaId = ins.rows[0]!.id;
+    expect(constanciaId).toBeGreaterThan(0);
+
+    // No puede subir una constancia a nombre de otro (creado_por != auth.uid()).
+    await expect(
+      db.query(
+        `insert into constancias_pago (periodo_id, dpto_id, creado_por) values ($1, 102, $2)`,
+        [periodoId, UID.admin],
+      ),
+    ).rejects.toThrow(/row-level security/);
+
+    // El residente NO puede confirmar (update sin política → 0 filas, sin efecto).
+    await db.query(
+      `update constancias_pago set estado = 'confirmada' where id = $1`,
+      [constanciaId],
+    );
+    await actuarComoServidor(db);
+    let estado = await db.query<{ estado: string }>(
+      `select estado from constancias_pago where id = $1`,
+      [constanciaId],
+    );
+    expect(estado.rows[0]!.estado).toBe("pendiente");
+
+    // Tesorería SÍ confirma.
+    await actuarComo(db, UID.tesoreria);
+    await db.query(
+      `update constancias_pago set estado = 'confirmada' where id = $1`,
+      [constanciaId],
+    );
+    await actuarComoServidor(db);
+    estado = await db.query<{ estado: string }>(
+      `select estado from constancias_pago where id = $1`,
+      [constanciaId],
+    );
+    expect(estado.rows[0]!.estado).toBe("confirmada");
+  });
+
   it("la bitácora solo la lee admin (portería ve 0 filas)", async () => {
     await actuarComo(db, UID.porteria);
     const comoPorteria = await db.query<{ n: number }>(
