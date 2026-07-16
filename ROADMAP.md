@@ -4,6 +4,31 @@ Cada fase es una serie de sesiones de Claude Code. Marca los checkboxes al compl
 
 ---
 
+## Cambio de diseño · Transparencia PÚBLICA (jul-2026)
+
+Decisión tomada: **la transparencia del edificio es una web abierta, sin login.** El
+"vecino/residente" deja de ser un usuario con clave y pasa a ser el **público general**
+que abre el link (se comparte por WhatsApp). El login queda **solo para los roles que
+escriben**: administración, tesorería y portería. Ver `docs/MATRIZ_ROLES.md`.
+
+- [x] T.1 Página pública `/transparencia` (sin login, solo lectura): caja + provisiones
+  + disponible, semáforo de pagos del mes con montos y número de dpto, estado de cuenta
+  de cada dpto con deudas por antigüedad, gastos con comprobante y consumo de agua 6
+  meses. _(app/transparencia + lib/transparencia.ts con cliente anónimo)_
+- [x] T.2 Portada: botón grande **"Ver la transparencia del edificio"** + enlace discreto
+  **"Ingresar"** (administración). _(app/page.tsx)_
+- [x] T.3 Se elimina el rol `residente` de los menús, `requireRol` y el seed; el login es
+  solo admin/tesorería/portería. La auto-subida de constancias (3.7) queda obsoleta.
+- [x] T.4 **RLS de lectura pública** (`supabase/migrations/0008_transparencia_publica.sql`):
+  el rol `anon` LEE solo las tablas de transparencia; **no** lee `perfiles`/`residentes`/
+  `audit_log`/`constancias_pago`; **no** escribe nada; se revoca EXECUTE de las funciones
+  del motor a `anon`. Verificado con `tests/rls.test.ts` (test del público anónimo).
+- [ ] T.5 **Lo que corres tú en Supabase:** aplicar la migración `0008` en el SQL Editor y
+  **eliminar el usuario `vecinos@chardin177.pe`** en Authentication → Users (ya no se usa).
+  Luego re-deploy en Netlify.
+
+---
+
 ## FASE 0 · Fundaciones (1 a 2 sesiones)
 
 - [x] 0.1 Inicializar Next.js 14 + TypeScript + Tailwind. Configurar `netlify.toml` con el plugin de Next.js. Primer deploy a Netlify (página "Chardin 177, próximamente"). _(Código y config listos; el deploy es el Paso 5 de la guía, lo haces tú.)_
@@ -11,7 +36,7 @@ Cada fase es una serie de sesiones de Claude Code. Marca los checkboxes al compl
 - [x] 0.3 Aplicar `supabase/schema.sql` como primera migración. Verificar que las 10 filas de `departamentos` y los datos semilla existen. _(Migración `supabase/migrations/0001_schema_inicial.sql` + `supabase/verificar_semilla.sql`.)_
 - [x] 0.4 Auth con magic link. Página de login. Hook `useSession`. Tabla `perfiles` conectada a `auth.users` con trigger de alta. _(Implementado con **email + contraseña** y `scripts/seed_perfiles.ts`, según el Prompt Maestro, no magic link.)_
 - [x] 0.5 Sistema de roles: helper `getRol()`, layout protegido por rol, página de "sin acceso".
-- [ ] 0.6 Crear los 4 usuarios reales iniciales (admin, tesorería, portería, 1 residente de prueba) y verificar RLS a mano: el portero NO puede leer pagos, el residente NO puede escribir nada. _(Los usuarios se crean en Supabase Auth + `npm run seed:perfiles`; pasos en el resumen.)_
+- [ ] 0.6 Crear los **3 usuarios reales** con login (admin, tesorería, portería) y verificar RLS a mano: el portero NO puede leer pagos, y el público anónimo NO puede escribir nada (ver test del público en `tests/rls.test.ts`). _(Los usuarios se crean en Supabase Auth + `npm run seed:perfiles`; pasos en el resumen. El "vecino" ya no es un usuario — ver "Cambio de diseño · Transparencia PÚBLICA".)_
 - [x] 0.7 `lib/centimos.ts`: helpers `aCentimos`, `aSoles`, `formatoPEN`, `prorratear` (con la regla del residuo al mayor consumidor) + tests unitarios.
 
 **Salida de fase:** app deployada con login funcionando y base de datos viva con RLS.
@@ -50,7 +75,7 @@ Cada fase es una serie de sesiones de Claude Code. Marca los checkboxes al compl
 - [x] 3.4 Recibo por dpto: vista imprimible/compartible con desglose completo, botón "compartir por WhatsApp" (link wa.me con texto del resumen).
 - [x] 3.5 Notificaciones por Resend: al emitir (cuota del mes a cada residente) y recordatorio a pendientes el día 25.
 - [x] 3.6 Mantenimiento / incidencia como egreso (roles: **tesorería o admin**, ver matriz): el vecino avisa por fuera (WhatsApp del edificio) y tesorería/admin lo registran como un **egreso** con su categoría (Ascensor, Reparaciones, etc.), monto, fecha y comprobante; entra a la caja del mes en curso y se ve en el dashboard de transparencia con su comprobante. **NO hay módulo de reporte del vecino** (decisión de la matriz: se mantiene simple). _Hoy ya se puede registrar como egreso normal; esta tarea es formalizar el flujo: un acceso directo "Registrar mantenimiento" que precargue la categoría, y dejarlo documentado._ Si el arreglo es grande y se cobra aparte, se usa la cuota extraordinaria (3.2).
-- [x] 3.7 Constancia de pago del vecino (opcional) + confirmación de tesorería (roles: **vecino** sube, **tesorería** confirma; admin respaldo — ver matriz): el vecino **puede** subir la foto de su constancia desde su estado de cuenta; el pago queda **"pendiente de confirmar"**. **Tesorería confirma** (lo valida y lo registra como pago oficial) o lo registra directo si el vecino no subió nada. Regla: el pago **solo cuenta como oficial cuando tesorería lo confirma**; la constancia del vecino es una ayuda, no reemplaza la confirmación. Requiere una tabla/estado para constancias pendientes y un permiso de escritura acotado para que el residente solo pueda adjuntar la suya.
+- [x] 3.7 Constancia de pago del vecino (opcional) + confirmación de tesorería. **⚠️ Superado por el cambio de diseño (jul-2026):** al abrir la transparencia, el vecino ya no tiene login y la **auto-subida de constancias queda obsoleta**. Ahora el vecino envía su comprobante por WhatsApp y **tesorería registra el pago directamente** en Cobranza (mismo resultado). Se retiró la UI de subida del vecino y la acción `subirConstancia`; la confirmación por tesorería se mantiene para resolver constancias que existieran de antes.
 
 ## FASE 4 · Historia y blindaje (2 a 3 sesiones)
 
@@ -59,13 +84,13 @@ Cada fase es una serie de sesiones de Claude Code. Marca los checkboxes al compl
 - [ ] 4.3 Backup: GitHub Action semanal que exporta las tablas a CSV en el repo (rama `backups`).
 - [ ] 4.4 Manual de usuario embebido: página /ayuda con el flujo mensual paso a paso con capturas.
 - [ ] 4.5 Traspaso de cargo: pantalla de admin para reasignar roles con confirmación y registro en bitácora.
-- [ ] 4.6 Exportador a Excel: botón **"Descargar Excel"** en cada módulo (pagos, egresos, estado de cuenta, caja) que exporta lo que se ve, más una pantalla de **"Exportación total"** con filtros por periodo, rango de meses, dpto y tipo de dato, generando un `.xlsx` con **una hoja por tipo de dato y montos en soles**. Generación **del lado servidor** con `exceljs` o `SheetJS`. Permisos: **admin y tesorería exportan todo; residente solo su propio estado de cuenta** (respetando RLS).
+- [ ] 4.6 Exportador a Excel: botón **"Descargar Excel"** en cada módulo (pagos, egresos, estado de cuenta, caja) que exporta lo que se ve, más una pantalla de **"Exportación total"** con filtros por periodo, rango de meses, dpto y tipo de dato, generando un `.xlsx` con **una hoja por tipo de dato y montos en soles**. Generación **del lado servidor** con `exceljs` o `SheetJS`. Permisos: **admin y tesorería exportan todo** (respetando RLS). _(La cláusula "residente exporta solo su estado de cuenta" quedó obsoleta: el público ya ve todos los estados de cuenta en la web `/transparencia`.)_
 
 ## Backlog (ideas futuras, no bloquean nada)
 
 - [ ] **Definir cuotas fijas desde la UI** (rol admin): pantalla para versionar vigilancia, mantenimiento, materiales y agua común (hoy vienen sembradas en `schema.sql`; RLS ya lo restringe a admin). Sin UI, cambiarlas requiere SQL. _(Brecha detectada en la auditoría de la matriz; decidir su fase.)_
 - [ ] Modo offline para la PWA (service worker con caché del último estado)
-- [ ] Decidir en junta si portería debe poder LEER datos financieros vía API (hoy el schema da lectura a todo autenticado por transparencia; la UI ya se lo oculta). Ver "Nota de seguridad pendiente" en `docs/MATRIZ_ROLES.md`.
+- [ ] Decidir en junta si portería debe poder LEER datos financieros vía API (hoy el schema da lectura a todo autenticado; la UI ya se lo oculta). _Nota: el lado **público** ya está acotado por la migración `0008` (el rol `anon` solo lee las tablas de transparencia); esto es solo sobre el usuario autenticado portería._ Ver "Nota de seguridad" en `docs/MATRIZ_ROLES.md`.
 - [ ] PIN de acceso rápido para portería
 - [ ] Reserva de áreas comunes
 - [ ] Exportar reporte anual PDF para la junta

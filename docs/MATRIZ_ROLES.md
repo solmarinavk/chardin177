@@ -2,32 +2,44 @@
 
 Documento de referencia para validar que cada tarea está asignada a un solo rol, sin duplicaciones ni vacíos. Fuente de verdad para el reparto de permisos. Julio 2026.
 
+> **Cambio de diseño (jul-2026): la transparencia es PÚBLICA.**
+> El "vecino" ya **no es un usuario con clave**: es el **público general** que abre la
+> web `/transparencia` (link que se comparte por WhatsApp). Esa página muestra caja,
+> gastos con comprobante, consumo de agua, semáforo de pagos (con montos y número de
+> dpto) y el estado de cuenta de cada dpto, **en vivo y sin login**. Es de **solo
+> lectura**. El login queda **solo para los roles que escriben**: administración,
+> tesorería y portería. A nivel de base de datos, el rol `anon` (público) puede LEER
+> únicamente las tablas de transparencia (RLS `pub_*`, migración `0008`) y **no puede
+> escribir nada** (ver "Nota de seguridad" al final).
+
 ## Principio rector
 
 **Cada dato se ingresa una sola vez, por el rol más cercano a la fuente, y todo lo demás se calcula o se jala automáticamente.** Nadie re-digita un dato que el sistema ya tiene.
 
 ## Matriz: quién hace qué (una X = responsable; "ve" = solo lectura)
 
-| Tarea | Portero | Tesorería | Administración | Vecino |
+Los tres primeros son roles **con login**. La última columna es el **público** (web
+abierta `/transparencia`), no un usuario: solo lectura, sin clave.
+
+| Tarea | Portero | Tesorería | Administración | Público (web) |
 |---|---|---|---|---|
 | Ingresar las 10 lecturas de agua del mes | **X** | (respaldo) | (respaldo) | ve |
 | Subir foto del medidor | **X** | | | |
 | Registrar recibo de agua (Sedapal) y luz | | **X** | (respaldo) | ve |
 | Calcular cuotas del mes | | **X** | (respaldo) | |
 | Emitir el periodo | | **X** | **X** | ve resultado |
-| Registrar pagos de cuotas + comprobante | | **X** | (respaldo) | ve el suyo |
-| Confirmar constancia subida por vecino | | **X** | (respaldo) | |
+| Registrar pagos de cuotas + comprobante | | **X** | (respaldo) | ve |
 | Registrar egresos / gastos + comprobante | | **X** | **X** | ve |
 | Registrar mantenimiento / incidencia | | **X** | **X** | ve |
 | Cerrar el mes (cuadra caja, arrastra saldo) | | **X** | **X** | ve |
 | Crear cuota extraordinaria / derrama | | **X** | **X** | ve |
 | Definir cuotas fijas (vigilancia, manto) | | | **X** | ve |
-| Gestionar residentes y usuarios/roles | | | **X** | |
-| Subir su propia constancia de pago (opcional) | | | | **X** |
-| Ver dashboard, caja, gastos, semáforo | ve* | ve | ve | ve |
-| Ver su estado de cuenta | | ve | ve | **X** (el suyo) |
+| Gestionar usuarios/roles | | | **X** | |
+| Ver caja, gastos, semáforo, consumo | ve* | ve | ve | **ve (web pública)** |
+| Ver estado de cuenta de cada dpto | | ve | ve | **ve (web pública)** |
 
-\* El portero, por diseño, solo entra a Lecturas. No se le muestra el resto (ver nota de seguridad abajo).
+\* El portero, por diseño, solo entra a Lecturas. No se le muestra el resto en la
+interfaz; a nivel de datos sigue siendo un usuario autenticado (ver nota de seguridad).
 
 ## Reglas anti-duplicación (lo que pediste)
 
@@ -59,20 +71,31 @@ Flujo:
 3. Se inyecta como "Extra" en el borrador del siguiente periodo, sumándose a la cuota normal de cada dpto.
 4. Cada vecino la ve desglosada en su recibo.
 
-## Flujo de constancia de pago del vecino (opcional)
+## Flujo de constancia / comprobante de pago del vecino
 
-Decisión tomada: **el vecino PUEDE subir su constancia, pero no es obligatorio.**
+Decisión tomada (jul-2026): **el vecino ya no sube constancias por sí mismo** (no
+tiene login). El flujo se simplifica:
 
-Flujo:
-1. El vecino paga por yape/transferencia.
-2. **Opcional:** sube la foto de su constancia desde su estado de cuenta (queda "pendiente de confirmar").
-3. **Tesorería confirma** ese pago (lo valida y lo registra oficialmente), o lo registra directo si el vecino no subió nada.
-4. El pago solo cuenta como oficial cuando tesorería lo confirma. La constancia del vecino es una ayuda, no reemplaza la confirmación.
+1. El vecino paga por yape/transferencia y **envía su comprobante por el WhatsApp del edificio.**
+2. **Tesorería registra el pago** directamente en Cobranza (con el comprobante adjunto).
+3. El pago cambia el semáforo del dpto al instante y queda visible en la web pública.
 
-## Nota de seguridad pendiente (decisión de junta)
+(La auto-subida de constancias por el vecino, de la Fase 3.7, quedó obsoleta al
+abrir la transparencia; el registro directo por tesorería cubre el mismo caso.)
 
-Hoy, a nivel de base de datos, cualquier usuario autenticado puede LEER todo (transparencia total). La interfaz ya le oculta al portero todo lo que no sean lecturas, pero técnicamente por API podría leer datos de pagos. Dos opciones a decidir en junta:
-- **Mantener así:** transparencia total, el portero es de confianza. Simple.
-- **Restringir en base:** que el portero solo pueda leer lecturas también a nivel de datos. Más estricto, algo más de trabajo.
+## Nota de seguridad (resuelta por la migración 0008)
 
-Esto no bloquea nada; es una decisión de política del edificio.
+La transparencia es pública **por diseño**, pero con límites claros a nivel de base de datos:
+
+- **Lectura pública (rol `anon`) SOLO de las tablas de transparencia:** departamentos,
+  periodos, cuotas, pagos, recibos, lecturas, egresos, categorías, provisiones,
+  movimientos, ajustes, cuotas fijas, conciliaciones y documentos.
+- **Datos personales fuera del alcance público:** `perfiles`, `residentes`,
+  `audit_log` y `constancias_pago` **no** tienen política `anon` → el público no las lee.
+- **Toda escritura exige un rol autenticado.** Ninguna acción (registrar pagos, egresos,
+  emitir, cerrar, calcular) corre sin login: las políticas de escritura son
+  `to authenticated` con `mi_rol()`, y a las funciones `generar_cuotas` / `emitir_periodo`
+  / `cerrar_periodo` se les **revocó el EXECUTE** a `anon`.
+- **Comprobantes:** el público ve solo los comprobantes de **egresos** (objetos
+  `egreso-%` en Storage). Los comprobantes de pagos y las fotos de medidores siguen privados.
+- El **portero** sigue siendo un usuario autenticado; la interfaz solo le muestra Lecturas.
