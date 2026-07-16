@@ -1,0 +1,45 @@
+name: Backup semanal (CSV)
+
+# Respalda todas las tablas a CSV y las guarda en la rama `backups` (tarea 4.3).
+# Requiere dos secrets del repo (Settings → Secrets → Actions):
+#   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
+
+on:
+  schedule:
+    - cron: "0 6 * * 1" # cada lunes 06:00 UTC (01:00 en Lima)
+  workflow_dispatch: {} # también se puede lanzar a mano
+
+permissions:
+  contents: write
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - run: npm ci
+
+      - name: Exportar las tablas a CSV
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: npx tsx scripts/backup_csv.ts "$RUNNER_TEMP/backup"
+
+      - name: Guardar en la rama backups
+        run: |
+          set -e
+          DATE=$(date -u +%Y-%m-%d)
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin backups || true
+          git checkout backups || git switch --orphan backups
+          mkdir -p "backups/$DATE"
+          cp "$RUNNER_TEMP/backup/"*.csv "backups/$DATE/"
+          git add "backups/$DATE"
+          git commit -m "chore: backup CSV $DATE" || { echo "sin cambios"; exit 0; }
+          git push origin HEAD:backups
