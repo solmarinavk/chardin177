@@ -497,6 +497,31 @@ begin
   end loop;
 end $$;
 
+-- Transparencia PÚBLICA: el rol anon (sin login) LEE las tablas de transparencia
+-- (todas menos residentes, que tiene datos personales). Ver migración 0008.
+grant select on
+  departamentos, periodos, cuotas, pagos, recibos_servicios, lecturas_agua,
+  egresos, categorias_egreso, provisiones, movimientos_provision, ajustes,
+  cuotas_fijas, conciliaciones_agua, documentos
+to anon;
+do $$ declare t text;
+begin
+  foreach t in array array['departamentos','periodos','cuotas','pagos',
+    'recibos_servicios','lecturas_agua','egresos','categorias_egreso',
+    'provisiones','movimientos_provision','ajustes','cuotas_fijas',
+    'conciliaciones_agua','documentos']
+  loop
+    execute format('create policy pub_%I on %I for select to anon using (true)', t, t);
+  end loop;
+end $$;
+
+-- El público NO ejecuta el motor/emisión/cierre (funciones SECURITY DEFINER).
+revoke execute on function generar_cuotas(bigint) from public, anon;
+revoke execute on function emitir_periodo(bigint) from public, anon;
+revoke execute on function cerrar_periodo(bigint) from public, anon;
+grant execute on function generar_cuotas(bigint), emitir_periodo(bigint), cerrar_periodo(bigint)
+  to authenticated, service_role;
+
 -- Perfiles: cada quien ve el suyo, admin ve y edita todos
 create policy sel_perfiles on perfiles for select to authenticated
   using (user_id = auth.uid() or mi_rol() = 'admin');

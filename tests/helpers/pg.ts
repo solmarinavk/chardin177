@@ -20,13 +20,14 @@ do $$ begin
 end $$;
 `;
 
-// Permisos base que Supabase da al rol authenticated (la seguridad fina la
-// pone RLS, igual que en producción).
+// Permisos base que Supabase da a authenticated y anon (la seguridad fina la
+// pone RLS, igual que en producción). NO se otorga execute de funciones a anon:
+// la migración 0008 lo revoca a propósito.
 const GRANTS = `
-grant usage on schema public to authenticated;
-grant usage on schema auth to authenticated;
-grant all on all tables in schema public to authenticated;
-grant usage, select on all sequences in schema public to authenticated;
+grant usage on schema public to authenticated, anon;
+grant usage on schema auth to authenticated, anon;
+grant all on all tables in schema public to authenticated, anon;
+grant usage, select on all sequences in schema public to authenticated, anon;
 `;
 
 const schemaSql = readFileSync(
@@ -46,6 +47,12 @@ export async function crearDbConSchema(): Promise<PGlite> {
 export async function actuarComo(db: PGlite, userId: string): Promise<void> {
   await db.query(`select set_config('request.jwt.claim.sub', $1, false)`, [userId]);
   await db.exec(`set role authenticated`);
+}
+
+// Simula al público sin login (rol anon, sin JWT).
+export async function actuarComoAnon(db: PGlite): Promise<void> {
+  await db.query(`select set_config('request.jwt.claim.sub', '', false)`);
+  await db.exec(`set role anon`);
 }
 
 // Vuelve al superusuario del test (sin JWT).

@@ -3,6 +3,7 @@ import type { PGlite } from "@electric-sql/pglite";
 import {
   crearDbConSchema,
   actuarComo,
+  actuarComoAnon,
   actuarComoServidor,
 } from "./helpers/pg";
 import junio from "./fixtures/junio_2026.json";
@@ -275,6 +276,59 @@ describe("RLS por rol (flujo real del mes)", () => {
       [constanciaId],
     );
     expect(estado.rows[0]!.estado).toBe("confirmada");
+  });
+
+  it("PÚBLICO (anon): lee transparencia, NO lee datos personales y NO escribe (0008)", async () => {
+    // Conteos como servidor para comparar.
+    const suCuotas = (await db.query<{ n: number }>(`select count(*)::int as n from cuotas`)).rows[0]!.n;
+    const suPagos = (await db.query<{ n: number }>(`select count(*)::int as n from pagos`)).rows[0]!.n;
+    expect(suCuotas).toBeGreaterThan(0); // hay un periodo emitido con cuotas
+
+    await actuarComoAnon(db);
+
+    // LEE las tablas de transparencia igual que el servidor (acceso completo).
+    const anCuotas = (await db.query<{ n: number }>(`select count(*)::int as n from cuotas`)).rows[0]!.n;
+    const anPagos = (await db.query<{ n: number }>(`select count(*)::int as n from pagos`)).rows[0]!.n;
+    const anEgresos = (await db.query<{ n: number }>(`select count(*)::int as n from egresos`)).rows[0]!.n;
+    expect(anCuotas).toBe(suCuotas);
+    expect(anPagos).toBe(suPagos);
+    expect(anEgresos).toBeGreaterThanOrEqual(0);
+
+    // NO ve datos personales (RLS sin política anon → 0 filas).
+    const perf = await db.query<{ n: number }>(`select count(*)::int as n from perfiles`);
+    expect(perf.rows[0]!.n).toBe(0);
+    const aud = await db.query<{ n: number }>(`select count(*)::int as n from audit_log`);
+    expect(aud.rows[0]!.n).toBe(0);
+    const con = await db.query<{ n: number }>(`select count(*)::int as n from constancias_pago`);
+    expect(con.rows[0]!.n).toBe(0);
+
+    // NO escribe nada.
+    const unaCuota = await db.query<{ id: number }>(`select id from cuotas limit 1`);
+    await actuarComoServidor(db);
+    const cuotaId = unaCuota.rows[0]!.id;
+    await actuarComoAnon(db);
+    await expect(
+      db.query(
+        `insert into pagos (cuota_id, monto_cent, fecha_pago) values ($1, 1, '2026-06-15')`,
+        [cuotaId],
+      ),
+    ).rejects.toThrow(/row-level security/);
+    await expect(
+      db.query(
+        `insert into egresos (periodo_id, concepto, monto_cent, fecha) values ($1, 'x', 1, '2026-06-01')`,
+        [periodoId],
+      ),
+    ).rejects.toThrow(/row-level security/);
+
+    // NO ejecuta el motor / emisión / cierre (execute revocado a anon).
+    await expect(db.query(`select emitir_periodo($1)`, [periodoId])).rejects.toThrow(
+      /permission denied|no autoriz/i,
+    );
+    await expect(db.query(`select cerrar_periodo($1)`, [periodoId])).rejects.toThrow(
+      /permission denied|no autoriz/i,
+    );
+
+    await actuarComoServidor(db);
   });
 
   it("la bitácora solo la lee admin (portería ve 0 filas)", async () => {
