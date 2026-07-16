@@ -188,6 +188,110 @@ export async function registrarPago(
   return { ok: true, error: null, mensaje: "Pago registrado." };
 }
 
+// 3.2 · Crear una cuota extraordinaria (derrama) en el borrador: se guarda como
+// ajustes con origen='cuota_extra' y el motor la suma como EXTRA al recalcular.
+export async function crearDerrama(
+  _prev: EstadoForm,
+  formData: FormData,
+): Promise<EstadoForm> {
+  await requireRol(TESORERIA);
+  const periodoId = enteroDesdeInput(formData.get("periodo_id"));
+  const concepto = String(formData.get("concepto") ?? "").trim();
+  const modo = String(formData.get("modo") ?? "igual");
+  const dptos = String(formData.get("dptos") ?? "")
+    .split(",")
+    .map((x) => Number(x))
+    .filter((x) => Number.isInteger(x));
+  if (periodoId === null) return { ok: false, error: "Periodo inválido." };
+  if (concepto.length === 0)
+    return { ok: false, error: "Escribe el concepto de la derrama." };
+  if (dptos.length === 0) return { ok: false, error: "No hay departamentos." };
+
+  const s = createClient();
+  const {
+    data: { user },
+  } = await s.auth.getUser();
+
+  type AjusteInsert = {
+    periodo_id: number;
+    dpto_id: number;
+    concepto: string;
+    monto_cent: number;
+    origen: string;
+    creado_por: string | null;
+  };
+  const filas: AjusteInsert[] = [];
+
+  if (modo === "igual") {
+    const monto = centimosDesdeInput(formData.get("monto"));
+    if (monto === null || monto <= 0)
+      return { ok: false, error: "El monto por departamento debe ser mayor a S/ 0." };
+    for (const d of dptos)
+      filas.push({
+        periodo_id: periodoId,
+        dpto_id: d,
+        concepto,
+        monto_cent: monto,
+        origen: "cuota_extra",
+        creado_por: user?.id ?? null,
+      });
+  } else {
+    for (const d of dptos) {
+      const m = centimosDesdeInput(formData.get(`monto_${d}`));
+      if (m === null || m < 0)
+        return { ok: false, error: `Monto inválido en el dpto ${d}.` };
+      if (m > 0)
+        filas.push({
+          periodo_id: periodoId,
+          dpto_id: d,
+          concepto,
+          monto_cent: m,
+          origen: "cuota_extra",
+          creado_por: user?.id ?? null,
+        });
+    }
+    if (filas.length === 0)
+      return { ok: false, error: "Ingresa al menos un monto." };
+  }
+
+  const { error } = await s.from("ajustes").insert(filas);
+  if (error) return { ok: false, error: mensajeError(error) };
+
+  revalidatePath(`/periodos/${periodoId}`);
+  return {
+    ok: true,
+    error: null,
+    mensaje: "Derrama creada. Vuelve a calcular las cuotas para incluirla.",
+  };
+}
+
+// 3.2 · Eliminar una derrama (por concepto) del borrador.
+export async function eliminarDerrama(
+  _prev: EstadoForm,
+  formData: FormData,
+): Promise<EstadoForm> {
+  await requireRol(TESORERIA);
+  const periodoId = enteroDesdeInput(formData.get("periodo_id"));
+  const concepto = String(formData.get("concepto") ?? "");
+  if (periodoId === null) return { ok: false, error: "Periodo inválido." };
+
+  const s = createClient();
+  const { error } = await s
+    .from("ajustes")
+    .delete()
+    .eq("periodo_id", periodoId)
+    .eq("origen", "cuota_extra")
+    .eq("concepto", concepto);
+  if (error) return { ok: false, error: mensajeError(error) };
+
+  revalidatePath(`/periodos/${periodoId}`);
+  return {
+    ok: true,
+    error: null,
+    mensaje: "Derrama eliminada. Vuelve a calcular las cuotas.",
+  };
+}
+
 // 2.3 · Cerrar el mes: cuadra la caja (pagos no contabilizados + egresos
 // pagados), fija el saldo final y abre el mes siguiente con el saldo
 // arrastrado. Las cuotas impagas pasan como deuda a la cuenta corriente.

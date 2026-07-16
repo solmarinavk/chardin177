@@ -6,6 +6,8 @@ import {
   getPeriodo,
   getResumenPeriodo,
   getPagosPorCuota,
+  getDepartamentos,
+  getDerramas,
   type ResumenPeriodo,
 } from "@/lib/periodos";
 import { getLibroCaja } from "@/lib/caja";
@@ -23,6 +25,7 @@ import { FormAccionPeriodo } from "@/components/forms/periodo";
 import { FormPago } from "@/components/forms/pago";
 import { IconoFlecha, IconoCheck, IconoAlerta, IconoGota } from "@/components/iconos";
 import { FormAnularPago } from "@/components/forms/anular-pago";
+import { FormDerrama, FormEliminarDerrama } from "@/components/forms/derrama";
 import {
   guardarRecibo,
   generarCuotas,
@@ -30,6 +33,8 @@ import {
   registrarPago,
   anularPago,
   cerrarPeriodo,
+  crearDerrama,
+  eliminarDerrama,
 } from "../acciones";
 
 const MEDIO_TEXTO: Record<string, string> = {
@@ -158,6 +163,9 @@ export default async function PeriodoDetallePage({
               </div>
             </section>
           )}
+
+          {/* Cuota extraordinaria (derrama) */}
+          {gestiona && <DerramaSection periodoId={id} />}
 
           {/* Paso 3 · Calcular */}
           {gestiona && (
@@ -421,6 +429,60 @@ async function CierreSection({
           confirmar={`¿Cerrar ${etiquetaPeriodo(resumen.periodo.anio, resumen.periodo.mes)}? El saldo final quedará fijado y se abrirá el mes siguiente.`}
         />
       </div>
+    </section>
+  );
+}
+
+// Cuota extraordinaria / derrama (3.2): crea EXTRA en el borrador. Solo se
+// muestra en borrador (el motor la recoge al recalcular).
+async function DerramaSection({ periodoId }: { periodoId: number }) {
+  const [departamentos, derramas] = await Promise.all([
+    getDepartamentos(),
+    getDerramas(periodoId),
+  ]);
+  const dptos = departamentos.map((d) => d.id);
+
+  return (
+    <section className="card animar-aparecer p-5">
+      <h2 className="titulo-seccion mb-3">Cuota extraordinaria (derrama)</h2>
+
+      {derramas.length > 0 && (
+        <ul className="mb-4 flex flex-col gap-2">
+          {derramas.map((d) => (
+            <li
+              key={d.concepto}
+              className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3"
+            >
+              <div className="min-w-0">
+                <p className="font-semibold text-slate-900">{d.concepto}</p>
+                <p className="num text-xs text-slate-500">
+                  Total {formatoPEN(d.totalCent)} · {d.porDpto.size} dpto
+                  {d.porDpto.size === 1 ? "" : "s"}
+                </p>
+              </div>
+              <FormEliminarDerrama
+                accion={eliminarDerrama}
+                periodoId={periodoId}
+                concepto={d.concepto}
+              />
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <details className="group">
+        <summary className="flex cursor-pointer list-none items-center gap-1 text-sm font-semibold text-slate-700 hover:text-slate-900">
+          <IconoFlecha className="h-3.5 w-3.5 transition-transform group-open:rotate-90" />
+          Agregar una derrama
+        </summary>
+        <div className="mt-3">
+          <FormDerrama accion={crearDerrama} periodoId={periodoId} dptos={dptos} />
+          <p className="mt-2 text-xs text-slate-500">
+            Después de crear la derrama, pulsa <b>Recalcular cuotas</b> para que se
+            sume como EXTRA en cada departamento.
+          </p>
+        </div>
+      </details>
     </section>
   );
 }

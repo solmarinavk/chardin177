@@ -227,6 +227,33 @@ describe("ciclo de vida del periodo", () => {
     await db.close();
   }, 60000);
 
+  it("una derrama (cuota_extra) entra como EXTRA al recalcular (3.2)", async () => {
+    const db = await crearDbConSchema();
+    // julio no trae extra; le agregamos una derrama de S/200 por dpto.
+    const julioId = await sembrarBorrador(db, julio, 2026, 7);
+    for (const d of julio.deptos) {
+      await db.query(
+        `insert into ajustes (periodo_id, dpto_id, concepto, monto_cent, origen)
+         values ($1, $2, 'Pintado de fachada', 20000, 'cuota_extra')`,
+        [julioId, d.dpto],
+      );
+    }
+    await db.query(`select generar_cuotas($1)`, [julioId]);
+    const cuotas = await db.query<{ extra_cent: number; total_cent: number }>(
+      `select extra_cent::int as extra_cent, total_cent::int as total_cent
+       from cuotas where periodo_id = $1 order by dpto_id`,
+      [julioId],
+    );
+    // Cada dpto suma 20000 de extra; el total sube en 20000 vs. el fixture.
+    for (let i = 0; i < cuotas.rows.length; i++) {
+      expect(cuotas.rows[i]!.extra_cent).toBe(20000);
+      const esperado = julio.deptos[i]!.esperado.total_cent + 20000;
+      // tolerancia 5c en el dpto 501 (residuo del agua)
+      expect(Math.abs(cuotas.rows[i]!.total_cent - esperado)).toBeLessThanOrEqual(5);
+    }
+    await db.close();
+  }, 60000);
+
   it("al cerrar el mes se acumula el aporte de cada provisión activa (3.1)", async () => {
     const db = await crearDbConSchema();
     const junioId = await sembrarBorrador(db, junio, 2026, 6);

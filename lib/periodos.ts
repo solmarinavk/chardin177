@@ -64,6 +64,34 @@ export async function getCuotas(periodoId: number): Promise<Cuota[]> {
   return data ?? [];
 }
 
+export type Derrama = {
+  concepto: string;
+  totalCent: number;
+  porDpto: Map<number, number>;
+};
+
+// Derramas (cuotas extraordinarias) de un periodo, agrupadas por concepto.
+// Se guardan como `ajustes` con origen='cuota_extra' y el motor las suma como EXTRA.
+export async function getDerramas(periodoId: number): Promise<Derrama[]> {
+  const s = createClient();
+  const { data } = await s
+    .from("ajustes")
+    .select("dpto_id, concepto, monto_cent")
+    .eq("periodo_id", periodoId)
+    .eq("origen", "cuota_extra")
+    .order("concepto");
+  const porConcepto = new Map<string, Derrama>();
+  for (const a of data ?? []) {
+    const d =
+      porConcepto.get(a.concepto) ??
+      { concepto: a.concepto, totalCent: 0, porDpto: new Map<number, number>() };
+    d.totalCent += a.monto_cent;
+    d.porDpto.set(a.dpto_id, (d.porDpto.get(a.dpto_id) ?? 0) + a.monto_cent);
+    porConcepto.set(a.concepto, d);
+  }
+  return [...porConcepto.values()];
+}
+
 export async function getLecturas(periodoId: number): Promise<LecturaAgua[]> {
   const s = createClient();
   const { data } = await s
