@@ -193,7 +193,7 @@ export default async function InicioPage() {
         </section>
       )}
 
-      {/* ——— Transparencia pública: el enlace para compartir por WhatsApp ——— */}
+      {/* ——— Las cuentas del edificio (página pública): el enlace de WhatsApp ——— */}
       <section
         className="card animar-aparecer p-5"
         style={{ animationDelay: "40ms" }}
@@ -204,12 +204,12 @@ export default async function InicioPage() {
           </span>
           <div className="min-w-0">
             <h2 className="text-lg font-bold text-slate-900">
-              Transparencia del edificio
+              Las cuentas del edificio
             </h2>
             <p className="mt-1 text-sm text-slate-600">
-              La caja, los gastos, el consumo de agua y quién pagó están en una
-              página <span className="font-semibold">pública</span>. Comparte el
-              enlace con los vecinos por WhatsApp.
+              La caja, los gastos, el consumo de agua y los pagos del mes están
+              en una página <span className="font-semibold">pública</span>.
+              Comparte el enlace con los vecinos por WhatsApp.
             </p>
           </div>
         </div>

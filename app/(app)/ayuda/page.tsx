@@ -18,11 +18,11 @@ type Seccion = { titulo: string; puntos: string[] };
 
 const SECCIONES: Seccion[] = [
   {
-    titulo: "Transparencia pública",
+    titulo: "Las cuentas del edificio (página pública)",
     puntos: [
       "La página /transparencia es abierta (sin clave): muéstrala o comparte el enlace por WhatsApp.",
-      "Ahí todos ven la caja, los gastos con comprobante, el consumo de agua y quién pagó.",
-      "Es solo de lectura: nadie puede cambiar nada sin entrar con su usuario.",
+      "Ahí todos ven la caja, los gastos con comprobante, el consumo de agua y los pagos del mes.",
+      "Es solo de consulta: nadie puede cambiar nada sin entrar con su usuario.",
     ],
   },
   {
@@ -148,7 +148,7 @@ export default async function AyudaPage() {
           href="/transparencia"
           className="mt-3 inline-flex items-center gap-1 font-semibold text-slate-700 hover:text-slate-900"
         >
-          Ver la transparencia pública
+          Ver las cuentas del edificio
           <IconoFlecha className="h-4 w-4" />
         </Link>
       </section>

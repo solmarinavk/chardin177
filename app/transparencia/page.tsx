@@ -19,9 +19,9 @@ import { IconoAlerta, IconoFlecha, IconoCandado } from "@/components/iconos";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Transparencia · Chardin 177",
+  title: "Las cuentas del edificio · Chardin 177",
   description:
-    "Caja, gastos, consumo de agua y pagos del edificio Chardin 177, en vivo y abiertos a todos.",
+    "La caja, los gastos, el consumo de agua y los pagos del mes del edificio Chardin 177, siempre al día.",
 };
 
 export default async function TransparenciaPage() {
@@ -60,15 +60,15 @@ export default async function TransparenciaPage() {
           </div>
           <div className="mt-4">
             <h2 className="text-2xl font-black tracking-tight text-slate-900">
-              Transparencia del edificio
+              Las cuentas del edificio
             </h2>
             <p className="mt-1 text-sm text-slate-600">
-              Todo a la vista: cuánto hay en caja, en qué se gasta, cuánta agua
-              consume cada depto y quién ya pagó. Esta página es{" "}
+              Cuánto hay en caja, en qué se gasta, el consumo de agua y los
+              pagos del mes, siempre al día. Es una página{" "}
               <span className="font-semibold text-slate-800">
-                solo de lectura
+                solo de consulta
               </span>
-              .
+              : aquí no se puede modificar nada.
             </p>
           </div>
         </header>
@@ -327,7 +327,7 @@ export default async function TransparenciaPage() {
         )}
 
         <footer className="pb-6 pt-2 text-center text-xs text-slate-400">
-          Chardin 177 · Administración transparente · Solo lectura
+          Chardin 177 · Barranco, Lima · Página de consulta
         </footer>
       </div>
     </main>
