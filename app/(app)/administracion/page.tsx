@@ -38,7 +38,7 @@ const HERRAMIENTAS: Herramienta[] = [
     titulo: "Bitácora",
     desc: "Registro de cada cambio sensible: quién, qué y cuándo.",
     icono: "bitacora",
-    activo: false,
+    activo: true,
   },
 ];
 

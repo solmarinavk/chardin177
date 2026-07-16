@@ -45,6 +45,22 @@ export function formatoFecha(iso: string): string {
   }).format(fecha);
 }
 
+// Timestamp ISO → 'dd/mm/yyyy HH:MM' en hora de Lima (para la bitácora).
+export function formatoFechaHora(iso: string): string {
+  const fecha = new Date(iso);
+  return new Intl.DateTimeFormat("es-PE", {
+    timeZone: "America/Lima",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  })
+    .format(fecha)
+    .replace(",", "");
+}
+
 // Fecha de hoy en Lima como 'YYYY-MM-DD' (para valores por defecto de formularios).
 export function hoyLima(): string {
   const partes = new Intl.DateTimeFormat("en-CA", {
