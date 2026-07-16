@@ -332,6 +332,12 @@ begin
   update pagos set contabilizado_en_periodo = p_periodo
    where contabilizado_en_periodo is null;
 
+  -- Aporte mensual automático a las provisiones activas (memo, no toca caja).
+  insert into movimientos_provision (provision_id, periodo_id, monto_cent, concepto)
+  select id, p_periodo, aporte_mensual_cent, 'Aporte mensual automático'
+    from provisiones
+   where activo and aporte_mensual_cent > 0;
+
   update periodos set estado='cerrado', cerrado_en=now(), saldo_final_cent=v_fin
    where id = p_periodo;
 

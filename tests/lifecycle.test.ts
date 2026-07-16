@@ -227,6 +227,33 @@ describe("ciclo de vida del periodo", () => {
     await db.close();
   }, 60000);
 
+  it("al cerrar el mes se acumula el aporte de cada provisión activa (3.1)", async () => {
+    const db = await crearDbConSchema();
+    const junioId = await sembrarBorrador(db, junio, 2026, 6);
+    await db.query(`select generar_cuotas($1)`, [junioId]);
+    await db.query(`select emitir_periodo($1)`, [junioId]);
+
+    // Configura aportes: Vacaciones 300.00, CTS 250.00, Gratificación 0 (no aporta).
+    await db.query(`update provisiones set aporte_mensual_cent = 30000 where concepto = 'Vacaciones'`);
+    await db.query(`update provisiones set aporte_mensual_cent = 25000 where concepto = 'CTS'`);
+
+    await db.query(`select cerrar_periodo($1)`, [junioId]);
+
+    const movs = await db.query<{ concepto: string; monto_cent: number }>(
+      `select p.concepto, m.monto_cent::int as monto_cent
+       from movimientos_provision m join provisiones p on p.id = m.provision_id
+       where m.periodo_id = $1 order by p.concepto`,
+      [junioId],
+    );
+    // Solo las dos con aporte > 0 generan movimiento.
+    expect(movs.rows).toHaveLength(2);
+    const porConcepto = new Map(movs.rows.map((r) => [r.concepto, r.monto_cent]));
+    expect(porConcepto.get("Vacaciones")).toBe(30000);
+    expect(porConcepto.get("CTS")).toBe(25000);
+
+    await db.close();
+  }, 60000);
+
   it("no se pueden registrar ni tocar egresos de un periodo cerrado", async () => {
     const db = await crearDbConSchema();
     const junioId = await sembrarBorrador(db, junio, 2026, 6);

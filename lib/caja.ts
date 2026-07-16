@@ -234,3 +234,35 @@ export async function getSaldosProvisiones(): Promise<SaldoProvision[]> {
     saldoCent: saldo.get(p.id) ?? 0,
   }));
 }
+
+export type Provision = Tables<"provisiones">;
+export type MovimientoProvision = Tables<"movimientos_provision">;
+
+export type ProvisionConSaldo = Provision & { saldoCent: number };
+
+// Provisiones con su saldo acumulado (para el módulo de provisiones).
+export async function getProvisionesConSaldo(): Promise<ProvisionConSaldo[]> {
+  const s = createClient();
+  const [{ data: provisiones }, { data: movimientos }] = await Promise.all([
+    s.from("provisiones").select("*").order("id"),
+    s.from("movimientos_provision").select("provision_id, monto_cent"),
+  ]);
+  const saldo = new Map<number, number>();
+  for (const m of movimientos ?? []) {
+    saldo.set(m.provision_id, (saldo.get(m.provision_id) ?? 0) + m.monto_cent);
+  }
+  return (provisiones ?? []).map((p) => ({ ...p, saldoCent: saldo.get(p.id) ?? 0 }));
+}
+
+// Últimos movimientos de provisión (aportes y usos), más reciente primero.
+export async function getMovimientosProvision(
+  limite = 20,
+): Promise<MovimientoProvision[]> {
+  const s = createClient();
+  const { data } = await s
+    .from("movimientos_provision")
+    .select("*")
+    .order("id", { ascending: false })
+    .limit(limite);
+  return data ?? [];
+}

@@ -75,9 +75,18 @@ export default async function CajaPage({
 
   return (
     <main className="flex flex-col gap-5">
-      <h1 className="animar-aparecer text-2xl font-black tracking-tight text-slate-900">
-        Caja y egresos
-      </h1>
+      <div className="animar-aparecer flex items-center justify-between gap-2">
+        <h1 className="text-2xl font-black tracking-tight text-slate-900">
+          Caja y egresos
+        </h1>
+        <Link
+          href="/provisiones"
+          className="btn-secondary min-h-[40px] shrink-0 px-3 py-2 text-sm"
+        >
+          Provisiones
+          <IconoFlecha className="h-4 w-4" />
+        </Link>
+      </div>
 
       {/* ——— Libro de caja del mes abierto (2.2) ——— */}
       {libro ? (
