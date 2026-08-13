@@ -240,6 +240,7 @@ declare
   v_sum_var integer;
   v_pool_agua integer;         -- recibo agua - agua común total
   v_asignado integer := 0;
+  v_luz_asignado integer := 0;
   v_residuo integer;
   v_max_dpto smallint;
   r record;
@@ -294,6 +295,7 @@ begin
       end if;
       v_asignado := v_asignado + v_ac;
       v_luz_d := round(v_luz / 10.0);
+      v_luz_asignado := v_luz_asignado + v_luz_d;
       v_vig := round(v_fijas.vigilancia_total_cent / 10.0);
       v_man := round(v_fijas.manto_total_cent / 10.0);
       v_tot := v_ac + v_fijas.agua_comun_dpto_cent + v_luz_d + v_vig + v_man
@@ -309,6 +311,17 @@ begin
   v_residuo := v_pool_agua - v_asignado;
   if v_residuo <> 0 then
     update cuotas set agua_consumo_cent = agua_consumo_cent + v_residuo,
+                      total_cent = total_cent + v_residuo
+     where periodo_id = p_periodo and dpto_id = v_max_dpto;
+  end if;
+
+  -- Residuo de redondeo de la luz (cuando el recibo NO es múltiplo de 10) al
+  -- mismo dpto de mayor consumo, para que Σ luz = recibo y las cuotas cuadren
+  -- exacto con los recibos (regla #7). En junio/julio el recibo de luz era
+  -- múltiplo de 10: el residuo era 0 y nada cambia (tests dorados intactos).
+  v_residuo := v_luz - v_luz_asignado;
+  if v_residuo <> 0 then
+    update cuotas set luz_cent = luz_cent + v_residuo,
                       total_cent = total_cent + v_residuo
      where periodo_id = p_periodo and dpto_id = v_max_dpto;
   end if;
