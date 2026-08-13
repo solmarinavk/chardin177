@@ -27,7 +27,6 @@ export function textoResumenMes(
   mes: number,
   cuotas: Cuota[],
   pagadoPorCuota: Map<number, number>,
-  opciones: { vence?: boolean } = {},
 ): string {
   const orden = [...cuotas].sort((a, b) => a.dpto_id - b.dpto_id);
 
@@ -57,7 +56,6 @@ export function textoResumenMes(
     `*Recaudado: ${formatoPEN(recaudado)} de ${formatoPEN(esperado)}*`,
     `✅ ${pagados} al día · 🟡 ${parciales} parcial${parciales === 1 ? "" : "es"} · 🔴 ${pendientes} pendiente${pendientes === 1 ? "" : "s"}`,
   ];
-  if (opciones.vence) bloques.push("", "Vence: fin de mes.");
   bloques.push("", "Consulta el detalle en:");
   return bloques.join("\n");
 }
