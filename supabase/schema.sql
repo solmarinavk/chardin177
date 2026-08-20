@@ -588,6 +588,45 @@ create policy upd_constancias on constancias_pago for update to authenticated
 create trigger tg_audit_constancias after insert or update or delete on constancias_pago
   for each row execute function fn_audit();
 
+-- ---------- Cuaderno de ocurrencias de portería (Fase 6) ----------
+-- Registro INTERNO de eventos del edificio con fotos de evidencia. El rol anon
+-- (público) NUNCA lo ve: las evidencias incluyen datos de terceros (DNI). El
+-- bucket de Storage y sus políticas van en la migración 0010.
+create table ocurrencias (
+  id bigint generated always as identity primary key,
+  fecha date not null default (now() at time zone 'America/Lima')::date,
+  categoria text not null default 'general',
+  titulo text not null,
+  detalle text,
+  creado_por uuid references auth.users(id),
+  creado_en timestamptz not null default now()
+);
+create index ix_ocurrencias_fecha on ocurrencias (fecha desc, id desc);
+
+create table ocurrencia_fotos (
+  id bigint generated always as identity primary key,
+  ocurrencia_id bigint not null references ocurrencias(id) on delete cascade,
+  ruta text not null,
+  creado_en timestamptz not null default now()
+);
+create index ix_ocurrencia_fotos_oc on ocurrencia_fotos (ocurrencia_id);
+
+alter table ocurrencias enable row level security;
+alter table ocurrencia_fotos enable row level security;
+
+-- Solo el personal (portería/tesorería/admin) lee y escribe. anon: NADA.
+create policy sel_ocurrencias on ocurrencias for select to authenticated
+  using (mi_rol() in ('porteria','tesoreria','admin'));
+create policy w_ocurrencias on ocurrencias for all to authenticated
+  using (mi_rol() in ('porteria','tesoreria','admin'))
+  with check (mi_rol() in ('porteria','tesoreria','admin'));
+
+create policy sel_ocurrencia_fotos on ocurrencia_fotos for select to authenticated
+  using (mi_rol() in ('porteria','tesoreria','admin'));
+create policy w_ocurrencia_fotos on ocurrencia_fotos for all to authenticated
+  using (mi_rol() in ('porteria','tesoreria','admin'))
+  with check (mi_rol() in ('porteria','tesoreria','admin'));
+
 -- NOTA Storage: las políticas de los buckets (comprobantes, medidores,
--- documentos) viven en supabase/migrations/0004_storage_policies.sql porque el
+-- documentos, ocurrencias) viven en supabase/migrations/0004 y 0010 porque el
 -- esquema `storage` solo existe en Supabase (no en la base de tests).

@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 export const BUCKET_MEDIDORES = "medidores";
 export const BUCKET_COMPROBANTES = "comprobantes";
 export const BUCKET_DOCUMENTOS = "documentos";
+export const BUCKET_OCURRENCIAS = "ocurrencias";
 
 function extensionDe(archivo: File): string {
   const punto = archivo.name.lastIndexOf(".");
