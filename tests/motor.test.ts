@@ -106,3 +106,35 @@ function pruebasFixture(nombre: string, f: Fixture, anio: number, mes: number) {
 
 pruebasFixture("junio 2026", junio, 2026, 6);
 pruebasFixture("julio 2026", julio, 2026, 7);
+
+// Regresión (migración 0009): cuando el recibo de luz NO es múltiplo de 10, el
+// residuo de redondeo se reparte al dpto de mayor consumo y las cuotas cuadran
+// EXACTO. Antes del fix, la luz se quedaba corta (p. ej. agosto 2026: 536.14 →
+// 536.10) y el desglose mostraba "NO cuadra".
+describe("generar_cuotas · residuo de luz (recibo no múltiplo de 10)", () => {
+  it("Σ luz = recibo y Σ totales = recibos + fijas (exacto)", async () => {
+    const f = { ...julio, recibo_luz_cent: 53614 }; // S/ 536.14, termina en 4
+    const db = await crearDbConSchema();
+    const periodoId = await sembrarBorrador(db, f, 2026, 8);
+    await db.query(`select generar_cuotas($1)`, [periodoId]);
+    const { rows } = await db.query<{ luz_cent: number; total_cent: number }>(
+      `select luz_cent::int as luz_cent, total_cent::int as total_cent
+       from cuotas where periodo_id = $1`,
+      [periodoId],
+    );
+    await db.close();
+
+    const sumLuz = rows.reduce((acc, c) => acc + c.luz_cent, 0);
+    const sumTot = rows.reduce((acc, c) => acc + c.total_cent, 0);
+    const derecha =
+      f.recibo_agua_cent +
+      f.recibo_luz_cent +
+      f.vigilancia_total_cent +
+      f.manto_total_cent +
+      f.materiales_dpto_cent * 10 +
+      f.extra_dpto_cent * 10;
+
+    expect(sumLuz, "Σ luz debe igualar el recibo").toBe(f.recibo_luz_cent);
+    expect(sumTot, "Σ totales debe cuadrar con recibos + fijas").toBe(derecha);
+  }, 60000);
+});

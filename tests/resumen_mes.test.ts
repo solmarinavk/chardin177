@@ -68,10 +68,8 @@ describe("resumen del mes para WhatsApp", () => {
     expect(texto.trimEnd().endsWith("Consulta el detalle en:")).toBe(true);
   });
 
-  it("con vence:true agrega la línea de vencimiento; sin ella no", () => {
-    const conVence = textoResumenMes(2026, 7, CUOTAS, PAGADO, { vence: true });
-    expect(conVence).toContain("Vence: fin de mes.");
-    expect(texto).not.toContain("Vence:");
+  it("nunca incluye una línea de vencimiento", () => {
+    expect(texto).not.toContain("Vence");
   });
 
   it("cuota pagada sin detalle de pagos cuenta como recaudada (sin deuda falsa)", () => {

@@ -361,7 +361,6 @@ export default async function PeriodoDetallePage({
                   periodo.mes,
                   resumen.cuotas,
                   resumen.pagadoPorCuota,
-                  { vence: periodo.estado === "emitido" },
                 )}
               />
             </div>

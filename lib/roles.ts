@@ -106,6 +106,14 @@ export const MENU: ItemMenu[] = [
     activo: true,
   },
   {
+    href: "/ocurrencias",
+    etiqueta: "Cuaderno de ocurrencias",
+    corta: "Cuaderno",
+    icono: "bitacora",
+    roles: ["porteria", "tesoreria", "admin"],
+    activo: true,
+  },
+  {
     href: "/periodos",
     etiqueta: "Periodos",
     corta: "Periodos",

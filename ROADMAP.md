@@ -95,6 +95,32 @@ escriben**: administración, tesorería y portería. Ver `docs/MATRIZ_ROLES.md`.
 - [x] 5.3 **Copy neutro** en la página pública: se renombra "Transparencia del edificio" por un título descriptivo sin narrativa de antes/después, y se revisa todo el texto de la página con ese criterio.
 - [x] 5.4 **Flujos sin fricción** (regla: si el dato ya existe, no se vuelve a pedir): (a) registrar pago en un toque desde el edificio con monto y fecha precargados; (b) el monto del mes anterior como referencia junto a cada recibo; (c) autoguardado de lecturas al salir del campo (el botón queda como confirmación); (d) fecha de pago = hoy y medio de pago recordando el último usado; (e) selector de mes en la página pública para ver meses anteriores; (f) botón "Compartir por WhatsApp" con el resumen del mes.
 - [x] 5.5 **Revisión general de UX**: recorrido con ojos de usuario nuevo — estados vacíos con guía, textos de botones que dicen qué pasa, confirmaciones solo donde el error es costoso, y lenguaje consistente en toda la app.
+- [x] 5.6 **Despertador de Supabase (anti-pausa)**: el plan gratuito de Supabase pausa el proyecto tras ~7 días sin actividad, dejando la web pública sin datos y sin login (nos pasó el 13/08/2026). Un GitHub Action diario (`.github/workflows/keep-alive.yml`) abre la página pública `/transparencia` (que consulta la base en cada carga, siempre fresca) para que Supabase nunca se considere inactivo. No usa secrets ni service key y no requiere re-deploy. _(Tú: mergear a `main` para que el cron se active; opcional, lanzarlo a mano la primera vez desde la pestaña Actions.)_
+- [x] 5.7 **Fix del motor · residuo de redondeo de la luz** (migración `0009`). La luz se repartía como `round(recibo/10)` por dpto sin repartir el residuo; cuando el recibo de luz NO es múltiplo de 10 (agosto 2026 = S/ 536.14) las cuotas quedaban 4 céntimos cortas y el desglose marcaba "NO cuadra". Ahora el residuo de la luz va al dpto de mayor consumo (igual que el agua) y Σ cuotas cuadra EXACTO con los recibos (regla #7). Junio/julio (recibo múltiplo de 10) no cambian; se agregó test de regresión (95 tests en verde). _(Tú: correr la migración `0009` en Supabase → SQL Editor antes de calcular agosto.)_
+
+## FASE 6 · Cuaderno de ocurrencias de portería (ago-2026)
+
+> A pedido: el portero, además de subir las lecturas de agua, necesita un **cuaderno
+> de ocurrencias digital** donde registre eventos del edificio (mantenimiento del
+> montavehículo/ascensor, incidencias, entregas, seguridad) con **fotos de
+> evidencia**, y poder **descargar el cuaderno en PDF**.
+
+- [x] 6.1 Tablas `ocurrencias` (fecha, categoría, título, detalle, creado_por) y
+  `ocurrencia_fotos` (fotos en Storage). RLS: **portería/tesorería/admin** escriben y
+  leen; **anon NO** (es interno — las evidencias incluyen DNI de terceros, jamás
+  público). Bucket de Storage `ocurrencias` con sus políticas por rol. _(schema.sql +
+  migración `0010_ocurrencias.sql`; el bucket se crea por SQL, sin pasos en el dashboard.)_
+- [x] 6.2 Módulo `/ocurrencias` (portería + tesorería + admin): lista mobile-first +
+  formulario para registrar una ocurrencia y subir varias fotos; en el menú de portería
+  con el ícono de bitácora. Reutiliza `subirFoto`/`urlFirmada` de las lecturas.
+- [x] 6.3 Exportar el cuaderno a **PDF**: vista imprimible (`/ocurrencias/pdf`) con las
+  ocurrencias y sus fotos, filtrable por rango de fechas; el navegador la guarda como PDF
+  (sin librería extra, robusto en Netlify).
+- [x] 6.4 Tests: RLS en pglite (portería escribe/lee; residente y anon no ven nada;
+  cascade de fotos) + helpers de categoría. 102 tests en verde, build y tsc limpios.
+
+> **Lo que corres tú:** aplicar la migración `0010_ocurrencias.sql` en Supabase → SQL
+> Editor, y hacer merge + re-deploy en Netlify. No hay pasos manuales en el dashboard.
 
 ## Backlog (ideas futuras, no bloquean nada)
 

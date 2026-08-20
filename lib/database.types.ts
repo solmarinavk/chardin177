@@ -18,6 +18,57 @@ export type Database = {
         Update: { id?: number; piso?: number; activo?: boolean };
         Relationships: [];
       };
+      ocurrencias: {
+        Row: {
+          id: number;
+          fecha: string;
+          categoria: string;
+          titulo: string;
+          detalle: string | null;
+          creado_por: string | null;
+          creado_en: string;
+        };
+        Insert: {
+          id?: number;
+          fecha?: string;
+          categoria?: string;
+          titulo: string;
+          detalle?: string | null;
+          creado_por?: string | null;
+          creado_en?: string;
+        };
+        Update: {
+          id?: number;
+          fecha?: string;
+          categoria?: string;
+          titulo?: string;
+          detalle?: string | null;
+          creado_por?: string | null;
+          creado_en?: string;
+        };
+        Relationships: [];
+      };
+      ocurrencia_fotos: {
+        Row: {
+          id: number;
+          ocurrencia_id: number;
+          ruta: string;
+          creado_en: string;
+        };
+        Insert: {
+          id?: number;
+          ocurrencia_id: number;
+          ruta: string;
+          creado_en?: string;
+        };
+        Update: {
+          id?: number;
+          ocurrencia_id?: number;
+          ruta?: string;
+          creado_en?: string;
+        };
+        Relationships: [];
+      };
       perfiles: {
         Row: {
           user_id: string;
