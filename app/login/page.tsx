@@ -1,17 +1,30 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 
+// Recordamos SOLO el correo. La contraseña NUNCA se guarda en la app: de eso se
+// encarga el llavero del navegador/celular, que es el lugar seguro.
+const CLAVE_CORREO = "chardin_ultimo_correo";
+
 export default function LoginPage() {
-  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [verClave, setVerClave] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cargando, setCargando] = useState(false);
+
+  // Prefill del último correo usado. Va en un efecto (no en el render) para no
+  // romper la hidratación.
+  useEffect(() => {
+    try {
+      const guardado = window.localStorage.getItem(CLAVE_CORREO);
+      if (guardado) setEmail(guardado);
+    } catch {
+      // Modo privado / almacenamiento bloqueado: simplemente no prefill.
+    }
+  }, []);
 
   async function ingresar(e: React.FormEvent) {
     e.preventDefault();
@@ -30,8 +43,16 @@ export default function LoginPage() {
       return;
     }
 
-    router.push("/inicio");
-    router.refresh();
+    try {
+      window.localStorage.setItem(CLAVE_CORREO, email.trim());
+    } catch {
+      // Sin almacenamiento: no pasa nada, solo no recordamos el correo.
+    }
+
+    // Navegación REAL (no del lado del cliente): así el navegador reconoce que
+    // el login funcionó y ofrece "¿Guardar la contraseña?", y de paso la sesión
+    // nueva llega al servidor en el mismo golpe.
+    window.location.assign("/inicio");
   }
 
   return (
@@ -58,9 +79,10 @@ export default function LoginPage() {
               </label>
               <input
                 id="email"
+                name="email"
                 type="email"
                 inputMode="email"
-                autoComplete="email"
+                autoComplete="username"
                 autoFocus
                 required
                 value={email}
@@ -77,6 +99,7 @@ export default function LoginPage() {
               <div className="relative">
                 <input
                   id="password"
+                  name="password"
                   type={verClave ? "text" : "password"}
                   autoComplete="current-password"
                   required
