@@ -6,6 +6,13 @@ import { BotonEnviar } from "@/components/BotonEnviar";
 import { IconoCheck, IconoCamara } from "@/components/iconos";
 import { ESTADO_INICIAL, type EstadoForm } from "@/lib/formularios";
 import { CATEGORIAS_OCURRENCIA } from "@/lib/ocurrencias-cat";
+import {
+  comprimirImagen,
+  ponerArchivosEnInput,
+  excedeLimite,
+  pesoTotal,
+  enMB,
+} from "@/lib/imagenes";
 
 type Accion = (prev: EstadoForm, fd: FormData) => Promise<EstadoForm>;
 
@@ -14,14 +21,41 @@ type Accion = (prev: EstadoForm, fd: FormData) => Promise<EstadoForm>;
 export function FormOcurrencia({ accion, hoy }: { accion: Accion; hoy: string }) {
   const [estado, formAction] = useFormState(accion, ESTADO_INICIAL);
   const [nFotos, setNFotos] = useState(0);
+  const [preparando, setPreparando] = useState(false);
+  const [avisoPeso, setAvisoPeso] = useState<string | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
+  const fotosRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (estado.ok) {
       formRef.current?.reset();
       setNFotos(0);
+      setAvisoPeso(null);
     }
   }, [estado]);
+
+  // Las fotos de cámara pesan 3–5 MB cada una: se comprimen aquí, en el propio
+  // celular, antes de enviarlas. Sin esto el formulario falla al subir varias.
+  async function alElegirFotos(e: React.ChangeEvent<HTMLInputElement>) {
+    const elegidas = Array.from(e.target.files ?? []);
+    setNFotos(elegidas.length);
+    setAvisoPeso(null);
+    if (elegidas.length === 0) return;
+    setPreparando(true);
+    try {
+      const livianas = await Promise.all(elegidas.map(comprimirImagen));
+      if (fotosRef.current) ponerArchivosEnInput(fotosRef.current, livianas);
+      // Si el navegador no pudo comprimirlas (p. ej. un formato que no decodifica),
+      // avisamos con un mensaje claro en vez de dejar que el envío falle.
+      if (excedeLimite(livianas)) {
+        setAvisoPeso(
+          `Las fotos pesan ${enMB(pesoTotal(livianas))} en total y no se pueden enviar juntas. Elige menos fotos e inténtalo de nuevo.`,
+        );
+      }
+    } finally {
+      setPreparando(false);
+    }
+  }
 
   return (
     <form ref={formRef} action={formAction} className="card flex flex-col gap-3 p-4">
@@ -86,13 +120,14 @@ export function FormOcurrencia({ accion, hoy }: { accion: Accion; hoy: string })
       <div>
         <span className="etiqueta">Fotos de evidencia (opcional)</span>
         <input
+          ref={fotosRef}
           id="fotos"
           name="fotos"
           type="file"
           accept="image/*"
           multiple
           className="peer sr-only"
-          onChange={(e) => setNFotos(e.target.files?.length ?? 0)}
+          onChange={alElegirFotos}
         />
         <label
           htmlFor="fotos"
@@ -105,7 +140,9 @@ export function FormOcurrencia({ accion, hoy }: { accion: Accion; hoy: string })
           {nFotos > 0 ? (
             <>
               <IconoCheck className="h-4 w-4 shrink-0" />
-              {nFotos} foto{nFotos === 1 ? "" : "s"} elegida{nFotos === 1 ? "" : "s"}
+              {preparando
+                ? "Preparando las fotos…"
+                : `${nFotos} foto${nFotos === 1 ? "" : "s"} elegida${nFotos === 1 ? "" : "s"}`}
             </>
           ) : (
             <>
@@ -116,7 +153,20 @@ export function FormOcurrencia({ accion, hoy }: { accion: Accion; hoy: string })
         </label>
       </div>
 
-      <BotonEnviar className="btn-primary" textoEnviando="Guardando…">
+      {avisoPeso && (
+        <p
+          role="alert"
+          className="rounded-xl bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800"
+        >
+          {avisoPeso}
+        </p>
+      )}
+
+      <BotonEnviar
+        className="btn-primary"
+        textoEnviando="Guardando…"
+        deshabilitado={preparando || avisoPeso !== null}
+      >
         Guardar en el cuaderno
       </BotonEnviar>
 
