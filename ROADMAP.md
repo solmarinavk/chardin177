@@ -119,8 +119,21 @@ escriben**: administración, tesorería y portería. Ver `docs/MATRIZ_ROLES.md`.
 - [x] 6.4 Tests: RLS en pglite (portería escribe/lee; residente y anon no ven nada;
   cascade de fotos) + helpers de categoría. 102 tests en verde, build y tsc limpios.
 
+- [x] 6.5 **Fix: las fotos de celular hacían fallar la subida** (reportado por el portero
+  el 04/09/2026: al guardar en el cuaderno salía *"Application error: a client-side
+  exception"*). Causa: un Server Action de Next acepta **1 MB** por defecto y una foto de
+  cámara pesa 3–5 MB (Netlify además corta la petición ~6 MB), así que subir varias
+  reventaba. Arreglo en tres capas: (a) las fotos se **comprimen en el navegador** antes
+  de subir (`lib/imagenes.ts`: lado mayor 1600 px, JPEG 0.82, respetando el EXIF para que
+  no salgan giradas; *best-effort* — si el navegador no puede, sube la original); (b)
+  `serverActions.bodySizeLimit` a 5 MB como red de seguridad (por debajo del tope de
+  Netlify); (c) `app/error.tsx`, pantalla de error en español en vez del mensaje crudo en
+  inglés. Alcanza a **todas** las subidas (medidores, comprobantes, egresos, constancias),
+  no solo al cuaderno. Tests del cálculo de redimensionado en `tests/imagenes.test.ts`.
+
 > **Lo que corres tú:** aplicar la migración `0010_ocurrencias.sql` en Supabase → SQL
 > Editor, y hacer merge + re-deploy en Netlify. No hay pasos manuales en el dashboard.
+> _(El fix 6.5 solo necesita merge + re-deploy, sin migración.)_
 
 ## Backlog (ideas futuras, no bloquean nada)
 
