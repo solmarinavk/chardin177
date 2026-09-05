@@ -8,6 +8,8 @@ import {
   enteroDesdeInput,
   type EstadoForm,
 } from "@/lib/formularios";
+import { formatoPEN } from "@/lib/centimos";
+import { formatoFecha } from "@/lib/fechas";
 import {
   BUCKET_COMPROBANTES,
   archivoConContenido,
@@ -48,6 +50,28 @@ export async function crearEgreso(
     return { ok: false, error: "Fecha inválida." };
 
   const s = createClient();
+
+  // Aviso de doble registro. Va ANTES de subir el comprobante: si se pide
+  // confirmación no queremos dejar un archivo huérfano en el storage.
+  if (formData.get("confirmar_duplicado") !== "on") {
+    const { data: iguales } = await s
+      .from("egresos")
+      .select("concepto")
+      .eq("periodo_id", periodoId)
+      .eq("monto_cent", monto)
+      .eq("fecha", fecha)
+      .limit(1);
+    const yaExiste = iguales?.[0];
+    if (yaExiste) {
+      return {
+        ok: false,
+        error: null,
+        confirmar:
+          `Ya hay un gasto de ${formatoPEN(monto)} con fecha ${formatoFecha(fecha)}: «${yaExiste.concepto}». ` +
+          `Si estás registrando ese mismo pago otra vez, no sigas. Si de verdad es un pago distinto, marca la casilla y vuelve a darle a Registrar.`,
+      };
+    }
+  }
 
   let comprobante_url: string | undefined;
   const archivo = archivoConContenido(formData.get("comprobante"));

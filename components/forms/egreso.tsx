@@ -105,6 +105,30 @@ export function FormEgreso({
         name="comprobante"
         etiqueta="Comprobante o factura (opcional)"
       />
+
+      {/* Aviso de doble registro: no borra lo escrito, solo pide confirmar. */}
+      {estado.confirmar && (
+        <div
+          role="alert"
+          className="flex flex-col gap-2 rounded-xl bg-amber-50 p-3 ring-1 ring-amber-200"
+        >
+          <p className="text-sm font-semibold text-amber-900">
+            Ojo: esto parece un gasto repetido
+          </p>
+          <p className="text-sm text-amber-800">{estado.confirmar}</p>
+          <label className="flex cursor-pointer items-center gap-2 rounded-lg bg-white px-3 py-2 ring-1 ring-amber-200">
+            <input
+              type="checkbox"
+              name="confirmar_duplicado"
+              className="h-5 w-5 accent-amber-600"
+            />
+            <span className="text-sm font-medium text-amber-900">
+              Sí, es un pago distinto. Regístralo igual.
+            </span>
+          </label>
+        </div>
+      )}
+
       <BotonEnviar textoEnviando="Registrando…">Registrar egreso</BotonEnviar>
       {estado.error && (
         <p role="alert" className="text-sm font-medium text-red-700">

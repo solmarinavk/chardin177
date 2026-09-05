@@ -1,5 +1,13 @@
 // Estado compartido para formularios con useFormState.
-export type EstadoForm = { ok: boolean; error: string | null; mensaje?: string };
+export type EstadoForm = {
+  ok: boolean;
+  error: string | null;
+  mensaje?: string;
+  // Aviso que NO es un error: la acción detectó algo sospechoso (p. ej. un
+  // gasto idéntico ya registrado) y necesita que la persona confirme. El
+  // formulario lo muestra en ámbar con una casilla, no en rojo.
+  confirmar?: string;
+};
 
 export const ESTADO_INICIAL: EstadoForm = { ok: false, error: null };
 

@@ -20,6 +20,12 @@ import {
   FormMarcarEgreso,
   FormAnularEgreso,
 } from "@/components/forms/egreso";
+import {
+  gruposDuplicados,
+  idsDuplicados,
+  montoRepetidoCent,
+  claveDuplicado,
+} from "@/lib/duplicados";
 import { crearEgreso, marcarEgreso, anularEgreso } from "./acciones";
 
 export const metadata: Metadata = { title: "Caja y egresos" };
@@ -56,6 +62,11 @@ export default async function CajaPage({
     periodoId: Number.isInteger(filtroPeriodo) ? filtroPeriodo : null,
     categoriaId: Number.isInteger(filtroCategoria) ? filtroCategoria : null,
   });
+
+  // Gastos que parecen registrados dos veces (mismo mes, monto y fecha).
+  const repetidos = gruposDuplicados(egresos);
+  const idsRepetidos = idsDuplicados(egresos);
+  const deMasCent = montoRepetidoCent(egresos);
 
   const nombreCategoria = new Map(categorias.map((c) => [c.id, c.nombre]));
   const etiquetaDePeriodo = new Map(
@@ -180,6 +191,55 @@ export default async function CajaPage({
         </section>
       )}
 
+      {/* ——— Aviso de gastos repetidos ——— */}
+      {gestiona && repetidos.length > 0 && (
+        <section className="card animar-aparecer border-amber-300 bg-amber-50 p-5">
+          <h2 className="text-lg font-bold text-amber-900">
+            Ojo: hay gastos que parecen repetidos
+          </h2>
+          <p className="mt-1 text-sm text-amber-800">
+            Estos gastos están cargados más de una vez con el mismo monto y la
+            misma fecha. Si fue un error, deja uno y anula los demás: la caja
+            está contando {formatoPEN(deMasCent)} de más.
+          </p>
+          <ul className="mt-3 flex flex-col gap-3">
+            {repetidos.map((grupo) => (
+              <li
+                key={claveDuplicado(grupo[0]!)}
+                className="rounded-xl bg-white p-3 ring-1 ring-amber-200"
+              >
+                <p className="num text-sm font-bold text-slate-900">
+                  {formatoPEN(grupo[0]!.monto_cent)} · {formatoFecha(grupo[0]!.fecha)}
+                  <span className="ml-1 font-medium text-amber-800">
+                    · {grupo.length} veces
+                  </span>
+                </p>
+                <ul className="mt-2 flex flex-col gap-1.5">
+                  {grupo.map((e) => (
+                    <li
+                      key={e.id}
+                      className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-1.5 first:border-0 first:pt-0"
+                    >
+                      <span className="text-sm text-slate-700">{e.concepto}</span>
+                      <FormAnularEgreso
+                        accion={anularEgreso}
+                        egresoId={e.id}
+                        descripcion={`${e.concepto} · ${formatoPEN(e.monto_cent)}`}
+                      />
+                    </li>
+                  ))}
+                </ul>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-3 text-xs text-amber-700">
+            Si en realidad son dos pagos distintos que coinciden en monto y
+            fecha, no anules nada: el aviso se va solo al cambiar la fecha de
+            uno, y no afecta las cuentas.
+          </p>
+        </section>
+      )}
+
       {/* ——— Registrar egreso (2.1) ——— */}
       {gestiona && periodoEgresoDestino && (
         <section className="card animar-aparecer p-5">
@@ -282,10 +342,22 @@ export default async function CajaPage({
         ) : (
           <ul className="flex flex-col gap-2">
             {egresos.map((e) => (
-              <li key={e.id} className="rounded-xl border border-slate-200 p-3">
+              <li
+                key={e.id}
+                className={`rounded-xl border p-3 ${
+                  idsRepetidos.has(e.id)
+                    ? "border-amber-300 bg-amber-50"
+                    : "border-slate-200"
+                }`}
+              >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="font-semibold text-slate-900">{e.concepto}</p>
+                    {idsRepetidos.has(e.id) && (
+                      <p className="mt-0.5 text-xs font-bold text-amber-800">
+                        Posible doble registro
+                      </p>
+                    )}
                     <p className="num mt-0.5 text-xs text-slate-500">
                       {formatoFecha(e.fecha)}
                       {e.categoria_id != null &&

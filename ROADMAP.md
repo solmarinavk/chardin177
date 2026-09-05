@@ -131,9 +131,22 @@ escriben**: administración, tesorería y portería. Ver `docs/MATRIZ_ROLES.md`.
   inglés. Alcanza a **todas** las subidas (medidores, comprobantes, egresos, constancias),
   no solo al cuaderno. Tests del cálculo de redimensionado en `tests/imagenes.test.ts`.
 
+- [x] 6.6 **Aviso de gastos registrados dos veces.** Pasó de verdad (set-2026): el recibo de
+  Sedapal de S/ 434.40 quedó ingresado dos veces el mismo día y la caja mostraba S/ 434.40
+  de más; solo se descubrió revisando la base a mano y la tesorera pasó el susto de no saber
+  si había duplicado o si le faltaba registrar. Ahora: (a) al registrar un egreso idéntico
+  (mismo mes, mismo monto, misma fecha) el formulario avisa en ámbar y **pide una
+  confirmación explícita** en vez de guardarlo callado — no borra lo escrito, solo hay que
+  marcar la casilla si de verdad es otro pago; (b) la pantalla de Caja muestra un aviso con
+  los gastos repetidos, cuánto se está contando de más y el botón de anular al lado, y los
+  resalta en la lista. Criterio: mismo periodo + mismo monto + misma fecha. La fecha entra a
+  propósito para no marcar las dos quincenas del portero (S/ 750 el 16 y el 31). Lógica pura
+  en `lib/duplicados.ts` con tests (`tests/duplicados.test.ts`, incluido el caso del falso
+  positivo). Sin migración: no toca el esquema.
+
 > **Lo que corres tú:** aplicar la migración `0010_ocurrencias.sql` en Supabase → SQL
 > Editor, y hacer merge + re-deploy en Netlify. No hay pasos manuales en el dashboard.
-> _(El fix 6.5 solo necesita merge + re-deploy, sin migración.)_
+> _(Los fixes 6.5 y 6.6 solo necesitan merge + re-deploy, sin migración.)_
 
 ## Backlog (ideas futuras, no bloquean nada)
 
