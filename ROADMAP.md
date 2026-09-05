@@ -144,9 +144,22 @@ escriben**: administración, tesorería y portería. Ver `docs/MATRIZ_ROLES.md`.
   en `lib/duplicados.ts` con tests (`tests/duplicados.test.ts`, incluido el caso del falso
   positivo). Sin migración: no toca el esquema.
 
-> **Lo que corres tú:** aplicar la migración `0010_ocurrencias.sql` en Supabase → SQL
-> Editor, y hacer merge + re-deploy en Netlify. No hay pasos manuales en el dashboard.
-> _(Los fixes 6.5 y 6.6 solo necesitan merge + re-deploy, sin migración.)_
+- [x] 6.7 **Corregir un error de un mes ya cerrado** (migración `0011`). El duplicado de 6.6 se
+  descubrió con agosto **ya cerrado**: `fn_bloquea_egreso_cerrado` impide borrarlo (correcto,
+  la historia no se reescribe) y `CLAUDE.md` manda corregir "como ajustes en el periodo
+  siguiente"… pero eso era **imposible**: `egresos.monto_cent` sólo admitía valores `>= 0`, así
+  que no había forma de devolver plata a la caja sin editar a mano un saldo — justo lo que la
+  regla #4 prohíbe. Ahora un egreso puede ser negativo (nunca 0): un egreso negativo devuelve
+  dinero a la caja, queda como línea visible en el libro y en la vista pública, y no toca ni un
+  dato del mes cerrado. En Caja hay una sección **"Corregir un error de un mes ya cerrado"** que
+  pregunta en castellano llano si la plata *vuelve* o *sale*, y prefija el concepto con
+  "Corrección:". Test de integración (`tests/correccion_caja.test.ts`) que cierra un mes con un
+  gasto duplicado dentro y comprueba que la corrección deja la caja exacta sin tocar lo cerrado.
+
+> **Lo que corres tú:** aplicar las migraciones `0010_ocurrencias.sql` y
+> `0011_egresos_correccion.sql` en Supabase → SQL Editor, y hacer merge + re-deploy en
+> Netlify. No hay pasos manuales en el dashboard. _(Los fixes 6.5 y 6.6 solo necesitan merge
+> + re-deploy; el 6.7 sí necesita la migración `0011`.)_
 
 ## Backlog (ideas futuras, no bloquean nada)
 

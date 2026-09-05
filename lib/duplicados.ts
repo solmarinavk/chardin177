@@ -50,3 +50,39 @@ export function montoRepetidoCent(egresos: EgresoComparable[]): number {
     0,
   );
 }
+
+// ---------------------------------------------------------------------------
+// Correcciones de caja
+//
+// Cuando el error se descubre con el mes YA cerrado, el duplicado no se puede
+// borrar (y está bien: la historia no se reescribe). La corrección va como una
+// línea nueva en el mes abierto. Como la caja es `inicial + ingresos − egresos`,
+// devolver plata es un egreso NEGATIVO.
+// ---------------------------------------------------------------------------
+
+export type DireccionCorreccion = "devolver" | "sacar";
+
+export function esDireccionCorreccion(v: unknown): v is DireccionCorreccion {
+  return v === "devolver" || v === "sacar";
+}
+
+// Recibe el monto SIEMPRE en positivo (lo que la persona escribe) y le pone el
+// signo según hacia dónde va la plata.
+export function montoCorreccionCent(
+  direccion: DireccionCorreccion,
+  montoCent: number,
+): number {
+  const abs = Math.abs(montoCent);
+  return direccion === "devolver" ? -abs : abs;
+}
+
+// El concepto lleva prefijo para que se distinga de un gasto normal en el
+// libro de caja y en la vista pública.
+export const PREFIJO_CORRECCION = "Corrección: ";
+
+export function conceptoCorreccion(texto: string): string {
+  const limpio = texto.trim();
+  return limpio.startsWith(PREFIJO_CORRECCION)
+    ? limpio
+    : `${PREFIJO_CORRECCION}${limpio}`;
+}

@@ -26,7 +26,13 @@ import {
   montoRepetidoCent,
   claveDuplicado,
 } from "@/lib/duplicados";
-import { crearEgreso, marcarEgreso, anularEgreso } from "./acciones";
+import { FormCorreccion } from "@/components/forms/correccion";
+import {
+  crearEgreso,
+  marcarEgreso,
+  anularEgreso,
+  crearCorreccion,
+} from "./acciones";
 
 export const metadata: Metadata = { title: "Caja y egresos" };
 
@@ -255,6 +261,36 @@ export default async function CajaPage({
                 periodoId={periodoEgresoDestino.id}
                 categorias={categorias}
                 fechaHoy={hoyLima()}
+              />
+            </div>
+          </details>
+        </section>
+      )}
+
+      {/* ——— Corregir un error de un mes cerrado (6.6) ——— */}
+      {gestiona && periodoEgresoDestino && (
+        <section className="card animar-aparecer p-5">
+          <details className="group">
+            <summary className="flex cursor-pointer list-none items-center gap-2 font-bold text-slate-900">
+              <IconoFlecha className="h-4 w-4 transition-transform group-open:rotate-90" />
+              Corregir un error de un mes ya cerrado
+            </summary>
+            <p className="mt-2 text-sm text-slate-600">
+              Un mes cerrado no se puede modificar: eso protege las cuentas de
+              todos. Si te diste cuenta tarde de un gasto duplicado o de uno que
+              faltó registrar, anótalo aquí y se ajusta el saldo del mes abierto
+              dejando constancia de por qué.
+            </p>
+            <div className="mt-3">
+              <FormCorreccion
+                accion={crearCorreccion}
+                periodoId={periodoEgresoDestino.id}
+                categorias={categorias}
+                fechaHoy={hoyLima()}
+                etiquetaMes={etiquetaPeriodo(
+                  periodoEgresoDestino.anio,
+                  periodoEgresoDestino.mes,
+                )}
               />
             </div>
           </details>

@@ -4,6 +4,10 @@ import {
   idsDuplicados,
   montoRepetidoCent,
   claveDuplicado,
+  montoCorreccionCent,
+  conceptoCorreccion,
+  esDireccionCorreccion,
+  PREFIJO_CORRECCION,
 } from "@/lib/duplicados";
 
 // El caso real: el recibo de Sedapal de S/ 434.40 quedó registrado dos veces el
@@ -92,5 +96,52 @@ describe("gruposDuplicados", () => {
     expect(claveDuplicado(egreso(1, 43440, "2026-09-04", 8))).not.toBe(
       claveDuplicado(egreso(2, 43440, "2026-09-05", 8)),
     );
+  });
+});
+
+// El duplicado de Sedapal se descubrió con agosto ya cerrado: no se puede
+// borrar, se corrige con una línea en el mes abierto. Devolver plata a la caja
+// es un egreso negativo, porque saldo = inicial + ingresos − egresos.
+describe("correcciones de caja", () => {
+  it("devolver plata a la caja da un monto negativo", () => {
+    expect(montoCorreccionCent("devolver", 43440)).toBe(-43440);
+  });
+
+  it("sacar plata de la caja da un monto positivo", () => {
+    expect(montoCorreccionCent("sacar", 43440)).toBe(43440);
+  });
+
+  it("ignora el signo que venga escrito y usa solo la dirección", () => {
+    // La persona escribe 434.40, nunca un negativo; el signo lo pone la app.
+    expect(montoCorreccionCent("devolver", -43440)).toBe(-43440);
+    expect(montoCorreccionCent("sacar", -43440)).toBe(43440);
+  });
+
+  it("una corrección que devuelve compensa exacto al gasto duplicado", () => {
+    const duplicado = 43440;
+    expect(duplicado + montoCorreccionCent("devolver", duplicado)).toBe(0);
+  });
+
+  it("marca el concepto para distinguirlo de un gasto normal", () => {
+    expect(conceptoCorreccion("Sedapal duplicado de agosto")).toBe(
+      `${PREFIJO_CORRECCION}Sedapal duplicado de agosto`,
+    );
+  });
+
+  it("no repite el prefijo si ya viene puesto", () => {
+    const yaPuesto = `${PREFIJO_CORRECCION}Sedapal duplicado`;
+    expect(conceptoCorreccion(yaPuesto)).toBe(yaPuesto);
+  });
+
+  it("recorta los espacios sobrantes del concepto", () => {
+    expect(conceptoCorreccion("  Sedapal  ")).toBe(`${PREFIJO_CORRECCION}Sedapal`);
+  });
+
+  it("solo acepta las dos direcciones válidas", () => {
+    expect(esDireccionCorreccion("devolver")).toBe(true);
+    expect(esDireccionCorreccion("sacar")).toBe(true);
+    expect(esDireccionCorreccion("otra")).toBe(false);
+    expect(esDireccionCorreccion(null)).toBe(false);
+    expect(esDireccionCorreccion(undefined)).toBe(false);
   });
 });
