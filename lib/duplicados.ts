@@ -10,6 +10,9 @@
 // (16 y 31), así que NO se marcan. El concepto no entra porque se escribe a
 // mano y casi nunca coincide letra por letra ("Sedapal" vs "Recibo Sedapal").
 
+import { formatoPEN } from "@/lib/centimos";
+import { formatoFecha } from "@/lib/fechas";
+
 export type EgresoComparable = {
   id: number;
   periodo_id: number;
@@ -49,6 +52,51 @@ export function montoRepetidoCent(egresos: EgresoComparable[]): number {
     (suma, grupo) => suma + grupo[0]!.monto_cent * (grupo.length - 1),
     0,
   );
+}
+
+// ---------------------------------------------------------------------------
+// Pagos de vecinos: aviso antes de registrar (6.8)
+//
+// La tesorera registra 10 pagos al mes, muchos más que gastos. Aquí se decide
+// si conviene frenar y preguntar antes de guardar: el mismo pago dos veces, un
+// dpto que ya pagó completo, o un monto que se pasa de la cuota (el 202 pagó
+// S/ 459.00 sobre una cuota de S/ 458.13 y nadie lo notó). null = todo normal.
+// ---------------------------------------------------------------------------
+
+export type PagoPrevio = { monto_cent: number; fecha_pago: string };
+
+export function avisoPago(a: {
+  dpto: number;
+  totalCent: number;
+  pagadoCent: number;
+  montoCent: number;
+  fecha: string;
+  previos: PagoPrevio[];
+}): string | null {
+  const igual = a.previos.find(
+    (p) => p.monto_cent === a.montoCent && p.fecha_pago === a.fecha,
+  );
+  if (igual) {
+    return (
+      `Ya registraste un pago igual del dpto ${a.dpto}: ${formatoPEN(a.montoCent)} con fecha ${formatoFecha(a.fecha)}. ` +
+      `Parece el mismo pago dos veces. Si de verdad son dos pagos distintos, marca la casilla y vuelve a darle a Registrar.`
+    );
+  }
+  if (a.pagadoCent >= a.totalCent) {
+    return (
+      `El dpto ${a.dpto} ya pagó completo este mes (${formatoPEN(a.pagadoCent)} de ${formatoPEN(a.totalCent)}). ` +
+      `Si aun así hay que registrar este pago, marca la casilla y vuelve a darle a Registrar.`
+    );
+  }
+  const exceso = a.pagadoCent + a.montoCent - a.totalCent;
+  if (exceso > 0) {
+    const yaPago = a.pagadoCent > 0 ? ` y ya pagó ${formatoPEN(a.pagadoCent)}` : "";
+    return (
+      `Con este pago el dpto ${a.dpto} quedaría pagando ${formatoPEN(exceso)} de más (la cuota es ${formatoPEN(a.totalCent)}${yaPago}). ` +
+      `Si el vecino transfirió de más, regístralo igual marcando la casilla: el exceso queda a su favor.`
+    );
+  }
+  return null;
 }
 
 // ---------------------------------------------------------------------------

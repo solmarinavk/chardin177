@@ -156,10 +156,29 @@ escriben**: administración, tesorería y portería. Ver `docs/MATRIZ_ROLES.md`.
   "Corrección:". Test de integración (`tests/correccion_caja.test.ts`) que cierra un mes con un
   gasto duplicado dentro y comprueba que la corrección deja la caja exacta sin tocar lo cerrado.
 
+- [x] 6.8 **Tesorería sin miedo** (a pedido: la tesorera no es tecnológica y el susto del
+  Sedapal duplicado dejó claro que la app no la acompañaba). Cuatro piezas, todas sin
+  migración: **(1) Checklist del mes en el inicio** — además del "te toca ahora", la lista
+  completa con ✓/☐: los 6 pasos del mes, y en cobranza los dptos que deben con nombre y monto
+  (cada uno es un enlace que abre su pago); más una sección "Cada mes, además" con los gastos
+  fijos —quincenas del portero (0/1/2), recibo de agua, recibo de luz— que se marcan solos al
+  registrarlos y cuyo enlace abre Caja con el gasto ya prellenado (`lib/flujo.ts`:
+  `dptosPendientes`, `tareasRecurrentes`, `quincenasEsperadas`). **(2) Aviso antes de
+  registrar un pago de vecino** — mismo monto y fecha que uno ya registrado, dpto que ya pagó
+  completo, o monto que se pasa de la cuota (el 202 pagó S/ 459.00 sobre S/ 458.13); pide
+  confirmación con casilla, igual que en egresos (`avisoPago` en `lib/duplicados.ts`).
+  **(3) Confirmación grande + Deshacer** — al registrar un pago o un gasto aparece una tarjeta
+  verde con el resumen ("Pago del dpto 302 · S/ 436.66 · 05/09/2026 · Yape") y el botón
+  "Me equivoqué, deshacer" que anula justo ese registro; para pagos vive en
+  `components/CobranzaDpto.tsx` (cliente) para que sobreviva al refresco cuando la cuota queda
+  pagada. **(4) Gastos frecuentes de un toque** — botones sacados del propio historial (los
+  conceptos más repetidos, con la categoría y el monto de la última vez) que llenan el
+  formulario de egreso (`lib/gastos-frecuentes.ts`). 36 tests nuevos (176 en total).
+
 > **Lo que corres tú:** aplicar las migraciones `0010_ocurrencias.sql` y
 > `0011_egresos_correccion.sql` en Supabase → SQL Editor, y hacer merge + re-deploy en
-> Netlify. No hay pasos manuales en el dashboard. _(Los fixes 6.5 y 6.6 solo necesitan merge
-> + re-deploy; el 6.7 sí necesita la migración `0011`.)_
+> Netlify. No hay pasos manuales en el dashboard. _(Los fixes 6.5, 6.6 y 6.8 solo necesitan
+> merge + re-deploy; el 6.7 sí necesita la migración `0011`.)_
 
 ## Backlog (ideas futuras, no bloquean nada)
 

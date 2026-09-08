@@ -27,6 +27,7 @@ import {
   claveDuplicado,
 } from "@/lib/duplicados";
 import { FormCorreccion } from "@/components/forms/correccion";
+import { gastosFrecuentes, presetPara, esTipoGasto } from "@/lib/gastos-frecuentes";
 import {
   crearEgreso,
   marcarEgreso,
@@ -39,7 +40,7 @@ export const metadata: Metadata = { title: "Caja y egresos" };
 export default async function CajaPage({
   searchParams,
 }: {
-  searchParams: { periodo?: string; categoria?: string };
+  searchParams: { periodo?: string; categoria?: string; registrar?: string; tipo?: string };
 }) {
   const perfil = await requireRol(["tesoreria", "admin"]);
   const gestiona = perfil.rol === "tesoreria" || perfil.rol === "admin";
@@ -90,6 +91,15 @@ export default async function CajaPage({
 
   const periodoEgresoDestino =
     abierto && abierto.estado !== "cerrado" ? abierto : null;
+
+  // 6.8 · Gastos frecuentes de un toque, sacados de TODO el historial (no solo
+  // del filtro actual). Si se llega desde el checklist con ?tipo=agua|luz|portero,
+  // el formulario se abre ya lleno con ese gasto.
+  const historial = await getEgresos({});
+  const frecuentes = gastosFrecuentes(historial);
+  const abrirRegistro = searchParams.registrar === "gasto";
+  const tipoPedido = esTipoGasto(searchParams.tipo) ? searchParams.tipo : null;
+  const presetInicial = tipoPedido ? presetPara(tipoPedido, frecuentes, nombreCategoria) : null;
 
   return (
     <main className="flex flex-col gap-5">
@@ -248,8 +258,8 @@ export default async function CajaPage({
 
       {/* ——— Registrar egreso (2.1) ——— */}
       {gestiona && periodoEgresoDestino && (
-        <section className="card animar-aparecer p-5">
-          <details className="group">
+        <section id="egreso" className="card animar-aparecer scroll-mt-24 p-5">
+          <details className="group" open={abrirRegistro}>
             <summary className="flex cursor-pointer list-none items-center gap-2 font-bold text-slate-900">
               <IconoFlecha className="h-4 w-4 transition-transform group-open:rotate-90" />
               Registrar egreso en{" "}
@@ -258,9 +268,12 @@ export default async function CajaPage({
             <div className="mt-4">
               <FormEgreso
                 accion={crearEgreso}
+                accionAnular={anularEgreso}
                 periodoId={periodoEgresoDestino.id}
                 categorias={categorias}
                 fechaHoy={hoyLima()}
+                frecuentes={frecuentes}
+                inicial={presetInicial}
               />
             </div>
           </details>
@@ -314,6 +327,7 @@ export default async function CajaPage({
             <div className="mt-3">
               <FormEgreso
                 accion={crearEgreso}
+                accionAnular={anularEgreso}
                 periodoId={periodoEgresoDestino.id}
                 categorias={categorias}
                 fechaHoy={hoyLima()}

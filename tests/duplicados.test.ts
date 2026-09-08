@@ -145,3 +145,67 @@ describe("correcciones de caja", () => {
     expect(esDireccionCorreccion(undefined)).toBe(false);
   });
 });
+
+// Aviso antes de registrar un pago de vecino (6.8). Es lo que la tesorera
+// hace 10 veces al mes: aquí es donde más vale frenar a tiempo.
+import { avisoPago } from "@/lib/duplicados";
+
+describe("avisoPago", () => {
+  const base = { dpto: 302, totalCent: 43666, fecha: "2026-09-05" };
+
+  it("un pago normal no avisa nada", () => {
+    expect(
+      avisoPago({ ...base, pagadoCent: 0, montoCent: 43666, previos: [] }),
+    ).toBeNull();
+  });
+
+  it("un pago parcial que no se pasa tampoco", () => {
+    expect(
+      avisoPago({ ...base, pagadoCent: 20000, montoCent: 23666, previos: [] }),
+    ).toBeNull();
+  });
+
+  it("el mismo monto y la misma fecha que uno ya registrado: parece repetido", () => {
+    const aviso = avisoPago({
+      ...base,
+      pagadoCent: 43666,
+      montoCent: 43666,
+      previos: [{ monto_cent: 43666, fecha_pago: "2026-09-05" }],
+    });
+    expect(aviso).toMatch(/pago igual del dpto 302/);
+    expect(aviso).toMatch(/dos veces/);
+  });
+
+  it("el dpto ya pagó completo", () => {
+    const aviso = avisoPago({
+      ...base,
+      pagadoCent: 43666,
+      montoCent: 10000,
+      previos: [{ monto_cent: 43666, fecha_pago: "2026-09-01" }],
+    });
+    expect(aviso).toMatch(/ya pagó completo/);
+  });
+
+  it("el caso real del 202: se pasa por 87 céntimos", () => {
+    const aviso = avisoPago({
+      dpto: 202,
+      totalCent: 45813,
+      pagadoCent: 0,
+      montoCent: 45900,
+      fecha: "2026-07-10",
+      previos: [],
+    });
+    expect(aviso).toMatch(/S\/ 0\.87 de más/);
+    expect(aviso).toMatch(/queda a su favor/);
+  });
+
+  it("si ya había pagado algo, lo menciona en el aviso", () => {
+    const aviso = avisoPago({
+      ...base,
+      pagadoCent: 20000,
+      montoCent: 30000,
+      previos: [{ monto_cent: 20000, fecha_pago: "2026-09-01" }],
+    });
+    expect(aviso).toMatch(/ya pagó S\/ 200\.00/);
+  });
+});

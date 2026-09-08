@@ -91,19 +91,31 @@ export async function crearEgreso(
     comprobante_url = res.ruta;
   }
 
-  const { error } = await s.from("egresos").insert({
-    periodo_id: periodoId,
-    concepto,
-    categoria_id: categoriaId,
-    monto_cent: monto,
-    fecha,
-    pagado,
-    ...(comprobante_url ? { comprobante_url } : {}),
-  });
+  const { data: creado, error } = await s
+    .from("egresos")
+    .insert({
+      periodo_id: periodoId,
+      concepto,
+      categoria_id: categoriaId,
+      monto_cent: monto,
+      fecha,
+      pagado,
+      ...(comprobante_url ? { comprobante_url } : {}),
+    })
+    .select("id")
+    .single();
   if (error) return { ok: false, error: mensajeError(error) };
 
   revalidarCaja();
-  return { ok: true, error: null, mensaje: "Egreso registrado." };
+  return {
+    ok: true,
+    error: null,
+    mensaje: "Egreso registrado.",
+    hecho: {
+      id: creado.id,
+      detalle: `${concepto} · ${formatoPEN(monto)} · ${formatoFecha(fecha)}${pagado ? "" : " · por pagar"}`,
+    },
+  };
 }
 
 // 6.6 · Corregir un error de un mes YA CERRADO.

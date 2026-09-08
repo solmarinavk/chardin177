@@ -7,6 +7,10 @@ export type EstadoForm = {
   // gasto idéntico ya registrado) y necesita que la persona confirme. El
   // formulario lo muestra en ámbar con una casilla, no en rojo.
   confirmar?: string;
+  // Lo que se acaba de crear: para mostrar una confirmación grande con el
+  // resumen ("Registraste el pago del dpto 302 por S/ 436.66") y un botón
+  // Deshacer que anula justo ese registro si fue un error.
+  hecho?: { id: number; detalle: string };
 };
 
 export const ESTADO_INICIAL: EstadoForm = { ok: false, error: null };

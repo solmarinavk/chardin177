@@ -2,11 +2,18 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { getPerfil, ETIQUETA_ROL, menuPara, rolEsRedundante } from "@/lib/roles";
 import { getPeriodoActual, getResumenPeriodo } from "@/lib/periodos";
-import { pasosDelMes, pasoActual } from "@/lib/flujo";
+import { getCategorias, getEgresos, getPeriodoAbierto } from "@/lib/caja";
+import {
+  pasosDelMes,
+  pasoActual,
+  dptosPendientes,
+  tareasRecurrentes,
+} from "@/lib/flujo";
 import { etiquetaPeriodo, formatoFecha, hoyLima } from "@/lib/fechas";
 import { formatoPEN } from "@/lib/centimos";
 import { Progreso } from "@/components/Progreso";
 import { Edificio } from "@/components/Edificio";
+import { ChecklistMes } from "@/components/ChecklistMes";
 import { mapaEdificio } from "@/lib/edificio";
 import { EstadoPeriodoBadge } from "@/components/estados";
 import { ICONOS, IconoFlecha, IconoGota } from "@/components/iconos";
@@ -31,6 +38,31 @@ export default async function InicioPage() {
   const siguiente = pasos ? pasoActual(pasos) : null;
 
   const gestiona = perfil.rol === "tesoreria" || perfil.rol === "admin";
+
+  // 6.8 · Checklist completo del mes para tesorería: qué dptos deben y qué
+  // gastos fijos (portero, agua, luz) aún no se registraron en el mes abierto.
+  const hoy = hoyLima();
+  const pendientes = resumen ? dptosPendientes(resumen.cuotas, resumen.pagadoPorCuota) : [];
+  let recurrentes: ReturnType<typeof tareasRecurrentes> = [];
+  if (gestiona && resumen) {
+    const abierto = await getPeriodoAbierto();
+    if (abierto) {
+      const [egresos, categorias] = await Promise.all([
+        getEgresos({ periodoId: abierto.id }),
+        getCategorias(),
+      ]);
+      const nombreCategoria = new Map(categorias.map((c) => [c.id, c.nombre]));
+      recurrentes = tareasRecurrentes(
+        abierto,
+        egresos.map((e) => ({
+          concepto: e.concepto,
+          categoria: e.categoria_id == null ? null : (nombreCategoria.get(e.categoria_id) ?? null),
+          monto_cent: e.monto_cent,
+        })),
+        hoy,
+      );
+    }
+  }
 
   return (
     <main className="flex flex-col gap-5">
@@ -149,6 +181,18 @@ export default async function InicioPage() {
                   <IconoFlecha className="h-4 w-4" />
                 </Link>
               )}
+            </div>
+          )}
+
+          {/* 6.8 · La lista completa del mes, para no tener que recordar nada */}
+          {pasos && resumen.periodo.estado !== "cerrado" && (
+            <div className="mt-5 rounded-2xl border border-slate-200 p-4">
+              <ChecklistMes
+                pasos={pasos}
+                pendientes={pendientes}
+                periodoId={resumen.periodo.id}
+                recurrentes={recurrentes}
+              />
             </div>
           )}
 
