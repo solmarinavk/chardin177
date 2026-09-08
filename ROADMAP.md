@@ -131,9 +131,54 @@ escriben**: administración, tesorería y portería. Ver `docs/MATRIZ_ROLES.md`.
   inglés. Alcanza a **todas** las subidas (medidores, comprobantes, egresos, constancias),
   no solo al cuaderno. Tests del cálculo de redimensionado en `tests/imagenes.test.ts`.
 
-> **Lo que corres tú:** aplicar la migración `0010_ocurrencias.sql` en Supabase → SQL
-> Editor, y hacer merge + re-deploy en Netlify. No hay pasos manuales en el dashboard.
-> _(El fix 6.5 solo necesita merge + re-deploy, sin migración.)_
+- [x] 6.6 **Aviso de gastos registrados dos veces.** Pasó de verdad (set-2026): el recibo de
+  Sedapal de S/ 434.40 quedó ingresado dos veces el mismo día y la caja mostraba S/ 434.40
+  de más; solo se descubrió revisando la base a mano y la tesorera pasó el susto de no saber
+  si había duplicado o si le faltaba registrar. Ahora: (a) al registrar un egreso idéntico
+  (mismo mes, mismo monto, misma fecha) el formulario avisa en ámbar y **pide una
+  confirmación explícita** en vez de guardarlo callado — no borra lo escrito, solo hay que
+  marcar la casilla si de verdad es otro pago; (b) la pantalla de Caja muestra un aviso con
+  los gastos repetidos, cuánto se está contando de más y el botón de anular al lado, y los
+  resalta en la lista. Criterio: mismo periodo + mismo monto + misma fecha. La fecha entra a
+  propósito para no marcar las dos quincenas del portero (S/ 750 el 16 y el 31). Lógica pura
+  en `lib/duplicados.ts` con tests (`tests/duplicados.test.ts`, incluido el caso del falso
+  positivo). Sin migración: no toca el esquema.
+
+- [x] 6.7 **Corregir un error de un mes ya cerrado** (migración `0011`). El duplicado de 6.6 se
+  descubrió con agosto **ya cerrado**: `fn_bloquea_egreso_cerrado` impide borrarlo (correcto,
+  la historia no se reescribe) y `CLAUDE.md` manda corregir "como ajustes en el periodo
+  siguiente"… pero eso era **imposible**: `egresos.monto_cent` sólo admitía valores `>= 0`, así
+  que no había forma de devolver plata a la caja sin editar a mano un saldo — justo lo que la
+  regla #4 prohíbe. Ahora un egreso puede ser negativo (nunca 0): un egreso negativo devuelve
+  dinero a la caja, queda como línea visible en el libro y en la vista pública, y no toca ni un
+  dato del mes cerrado. En Caja hay una sección **"Corregir un error de un mes ya cerrado"** que
+  pregunta en castellano llano si la plata *vuelve* o *sale*, y prefija el concepto con
+  "Corrección:". Test de integración (`tests/correccion_caja.test.ts`) que cierra un mes con un
+  gasto duplicado dentro y comprueba que la corrección deja la caja exacta sin tocar lo cerrado.
+
+- [x] 6.8 **Tesorería sin miedo** (a pedido: la tesorera no es tecnológica y el susto del
+  Sedapal duplicado dejó claro que la app no la acompañaba). Cuatro piezas, todas sin
+  migración: **(1) Checklist del mes en el inicio** — además del "te toca ahora", la lista
+  completa con ✓/☐: los 6 pasos del mes, y en cobranza los dptos que deben con nombre y monto
+  (cada uno es un enlace que abre su pago); más una sección "Cada mes, además" con los gastos
+  fijos —quincenas del portero (0/1/2), recibo de agua, recibo de luz— que se marcan solos al
+  registrarlos y cuyo enlace abre Caja con el gasto ya prellenado (`lib/flujo.ts`:
+  `dptosPendientes`, `tareasRecurrentes`, `quincenasEsperadas`). **(2) Aviso antes de
+  registrar un pago de vecino** — mismo monto y fecha que uno ya registrado, dpto que ya pagó
+  completo, o monto que se pasa de la cuota (el 202 pagó S/ 459.00 sobre S/ 458.13); pide
+  confirmación con casilla, igual que en egresos (`avisoPago` en `lib/duplicados.ts`).
+  **(3) Confirmación grande + Deshacer** — al registrar un pago o un gasto aparece una tarjeta
+  verde con el resumen ("Pago del dpto 302 · S/ 436.66 · 05/09/2026 · Yape") y el botón
+  "Me equivoqué, deshacer" que anula justo ese registro; para pagos vive en
+  `components/CobranzaDpto.tsx` (cliente) para que sobreviva al refresco cuando la cuota queda
+  pagada. **(4) Gastos frecuentes de un toque** — botones sacados del propio historial (los
+  conceptos más repetidos, con la categoría y el monto de la última vez) que llenan el
+  formulario de egreso (`lib/gastos-frecuentes.ts`). 36 tests nuevos (176 en total).
+
+> **Lo que corres tú:** aplicar las migraciones `0010_ocurrencias.sql` y
+> `0011_egresos_correccion.sql` en Supabase → SQL Editor, y hacer merge + re-deploy en
+> Netlify. No hay pasos manuales en el dashboard. _(Los fixes 6.5, 6.6 y 6.8 solo necesitan
+> merge + re-deploy; el 6.7 sí necesita la migración `0011`.)_
 
 ## Backlog (ideas futuras, no bloquean nada)
 

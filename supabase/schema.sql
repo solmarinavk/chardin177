@@ -143,7 +143,10 @@ create table egresos (
   periodo_id bigint not null references periodos(id),
   categoria_id smallint references categorias_egreso(id),
   concepto text not null,
-  monto_cent integer not null check (monto_cent >= 0),
+  -- Positivo = sale plata de la caja. Negativo = corrección que la devuelve
+  -- (p. ej. anular un gasto duplicado de un mes ya cerrado, que no se puede
+  -- borrar). Nunca 0. Ver migración 0011.
+  monto_cent integer not null check (monto_cent <> 0),
   fecha date not null,
   pagado boolean not null default true,
   comprobante_url text,

@@ -20,14 +20,27 @@ import {
   FormMarcarEgreso,
   FormAnularEgreso,
 } from "@/components/forms/egreso";
-import { crearEgreso, marcarEgreso, anularEgreso } from "./acciones";
+import {
+  gruposDuplicados,
+  idsDuplicados,
+  montoRepetidoCent,
+  claveDuplicado,
+} from "@/lib/duplicados";
+import { FormCorreccion } from "@/components/forms/correccion";
+import { gastosFrecuentes, presetPara, esTipoGasto } from "@/lib/gastos-frecuentes";
+import {
+  crearEgreso,
+  marcarEgreso,
+  anularEgreso,
+  crearCorreccion,
+} from "./acciones";
 
 export const metadata: Metadata = { title: "Caja y egresos" };
 
 export default async function CajaPage({
   searchParams,
 }: {
-  searchParams: { periodo?: string; categoria?: string };
+  searchParams: { periodo?: string; categoria?: string; registrar?: string; tipo?: string };
 }) {
   const perfil = await requireRol(["tesoreria", "admin"]);
   const gestiona = perfil.rol === "tesoreria" || perfil.rol === "admin";
@@ -57,6 +70,11 @@ export default async function CajaPage({
     categoriaId: Number.isInteger(filtroCategoria) ? filtroCategoria : null,
   });
 
+  // Gastos que parecen registrados dos veces (mismo mes, monto y fecha).
+  const repetidos = gruposDuplicados(egresos);
+  const idsRepetidos = idsDuplicados(egresos);
+  const deMasCent = montoRepetidoCent(egresos);
+
   const nombreCategoria = new Map(categorias.map((c) => [c.id, c.nombre]));
   const etiquetaDePeriodo = new Map(
     periodos.map((p) => [p.id, etiquetaPeriodo(p.anio, p.mes)]),
@@ -73,6 +91,15 @@ export default async function CajaPage({
 
   const periodoEgresoDestino =
     abierto && abierto.estado !== "cerrado" ? abierto : null;
+
+  // 6.8 · Gastos frecuentes de un toque, sacados de TODO el historial (no solo
+  // del filtro actual). Si se llega desde el checklist con ?tipo=agua|luz|portero,
+  // el formulario se abre ya lleno con ese gasto.
+  const historial = await getEgresos({});
+  const frecuentes = gastosFrecuentes(historial);
+  const abrirRegistro = searchParams.registrar === "gasto";
+  const tipoPedido = esTipoGasto(searchParams.tipo) ? searchParams.tipo : null;
+  const presetInicial = tipoPedido ? presetPara(tipoPedido, frecuentes, nombreCategoria) : null;
 
   return (
     <main className="flex flex-col gap-5">
@@ -180,10 +207,59 @@ export default async function CajaPage({
         </section>
       )}
 
+      {/* ——— Aviso de gastos repetidos ——— */}
+      {gestiona && repetidos.length > 0 && (
+        <section className="card animar-aparecer border-amber-300 bg-amber-50 p-5">
+          <h2 className="text-lg font-bold text-amber-900">
+            Ojo: hay gastos que parecen repetidos
+          </h2>
+          <p className="mt-1 text-sm text-amber-800">
+            Estos gastos están cargados más de una vez con el mismo monto y la
+            misma fecha. Si fue un error, deja uno y anula los demás: la caja
+            está contando {formatoPEN(deMasCent)} de más.
+          </p>
+          <ul className="mt-3 flex flex-col gap-3">
+            {repetidos.map((grupo) => (
+              <li
+                key={claveDuplicado(grupo[0]!)}
+                className="rounded-xl bg-white p-3 ring-1 ring-amber-200"
+              >
+                <p className="num text-sm font-bold text-slate-900">
+                  {formatoPEN(grupo[0]!.monto_cent)} · {formatoFecha(grupo[0]!.fecha)}
+                  <span className="ml-1 font-medium text-amber-800">
+                    · {grupo.length} veces
+                  </span>
+                </p>
+                <ul className="mt-2 flex flex-col gap-1.5">
+                  {grupo.map((e) => (
+                    <li
+                      key={e.id}
+                      className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-1.5 first:border-0 first:pt-0"
+                    >
+                      <span className="text-sm text-slate-700">{e.concepto}</span>
+                      <FormAnularEgreso
+                        accion={anularEgreso}
+                        egresoId={e.id}
+                        descripcion={`${e.concepto} · ${formatoPEN(e.monto_cent)}`}
+                      />
+                    </li>
+                  ))}
+                </ul>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-3 text-xs text-amber-700">
+            Si en realidad son dos pagos distintos que coinciden en monto y
+            fecha, no anules nada: el aviso se va solo al cambiar la fecha de
+            uno, y no afecta las cuentas.
+          </p>
+        </section>
+      )}
+
       {/* ——— Registrar egreso (2.1) ——— */}
       {gestiona && periodoEgresoDestino && (
-        <section className="card animar-aparecer p-5">
-          <details className="group">
+        <section id="egreso" className="card animar-aparecer scroll-mt-24 p-5">
+          <details className="group" open={abrirRegistro}>
             <summary className="flex cursor-pointer list-none items-center gap-2 font-bold text-slate-900">
               <IconoFlecha className="h-4 w-4 transition-transform group-open:rotate-90" />
               Registrar egreso en{" "}
@@ -192,9 +268,42 @@ export default async function CajaPage({
             <div className="mt-4">
               <FormEgreso
                 accion={crearEgreso}
+                accionAnular={anularEgreso}
                 periodoId={periodoEgresoDestino.id}
                 categorias={categorias}
                 fechaHoy={hoyLima()}
+                frecuentes={frecuentes}
+                inicial={presetInicial}
+              />
+            </div>
+          </details>
+        </section>
+      )}
+
+      {/* ——— Corregir un error de un mes cerrado (6.6) ——— */}
+      {gestiona && periodoEgresoDestino && (
+        <section className="card animar-aparecer p-5">
+          <details className="group">
+            <summary className="flex cursor-pointer list-none items-center gap-2 font-bold text-slate-900">
+              <IconoFlecha className="h-4 w-4 transition-transform group-open:rotate-90" />
+              Corregir un error de un mes ya cerrado
+            </summary>
+            <p className="mt-2 text-sm text-slate-600">
+              Un mes cerrado no se puede modificar: eso protege las cuentas de
+              todos. Si te diste cuenta tarde de un gasto duplicado o de uno que
+              faltó registrar, anótalo aquí y se ajusta el saldo del mes abierto
+              dejando constancia de por qué.
+            </p>
+            <div className="mt-3">
+              <FormCorreccion
+                accion={crearCorreccion}
+                periodoId={periodoEgresoDestino.id}
+                categorias={categorias}
+                fechaHoy={hoyLima()}
+                etiquetaMes={etiquetaPeriodo(
+                  periodoEgresoDestino.anio,
+                  periodoEgresoDestino.mes,
+                )}
               />
             </div>
           </details>
@@ -218,6 +327,7 @@ export default async function CajaPage({
             <div className="mt-3">
               <FormEgreso
                 accion={crearEgreso}
+                accionAnular={anularEgreso}
                 periodoId={periodoEgresoDestino.id}
                 categorias={categorias}
                 fechaHoy={hoyLima()}
@@ -282,10 +392,22 @@ export default async function CajaPage({
         ) : (
           <ul className="flex flex-col gap-2">
             {egresos.map((e) => (
-              <li key={e.id} className="rounded-xl border border-slate-200 p-3">
+              <li
+                key={e.id}
+                className={`rounded-xl border p-3 ${
+                  idsRepetidos.has(e.id)
+                    ? "border-amber-300 bg-amber-50"
+                    : "border-slate-200"
+                }`}
+              >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="font-semibold text-slate-900">{e.concepto}</p>
+                    {idsRepetidos.has(e.id) && (
+                      <p className="mt-0.5 text-xs font-bold text-amber-800">
+                        Posible doble registro
+                      </p>
+                    )}
                     <p className="num mt-0.5 text-xs text-slate-500">
                       {formatoFecha(e.fecha)}
                       {e.categoria_id != null &&
