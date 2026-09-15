@@ -15,9 +15,20 @@ import {
   subirFoto,
 } from "@/lib/storage";
 import { notificarEmision } from "@/lib/notificaciones";
+import { avisoPago } from "@/lib/duplicados";
+import { formatoPEN } from "@/lib/centimos";
+import { formatoFecha } from "@/lib/fechas";
 import type { MedioPago, TipoRecibo } from "@/lib/database.types";
 
 const TESORERIA: ("tesoreria" | "admin")[] = ["tesoreria", "admin"];
+
+const MEDIO_TEXTO: Record<MedioPago, string> = {
+  yape: "Yape",
+  plin: "Plin",
+  transferencia: "Transferencia",
+  efectivo: "Efectivo",
+  otro: "Otro",
+};
 
 function mensajeError(error: { code?: string; message: string }): string {
   if (error.code === "42501") return "No tienes permiso para esta acción.";
@@ -58,12 +69,14 @@ export async function crearPeriodo(
   redirect(`/periodos/${data.id}`);
 }
 
-// 1.3 · Guardar el monto de un recibo (agua o luz) del periodo, con foto opcional.
+// 1.3 · Guardar el monto de un recibo (agua o luz) del periodo, con foto o PDF.
+// 6.9 · Portería también puede: los recibos le llegan al portero. Sólo sobre el
+// mes en preparación (lo garantiza el trigger tg_lock_recibos) y nunca borra.
 export async function guardarRecibo(
   _prev: EstadoForm,
   formData: FormData,
 ): Promise<EstadoForm> {
-  await requireRol(TESORERIA);
+  await requireRol(["porteria", "tesoreria", "admin"]);
   const periodoId = enteroDesdeInput(formData.get("periodo_id"));
   const tipoRaw = String(formData.get("tipo") ?? "");
   const monto = centimosDesdeInput(formData.get("monto"));
@@ -88,11 +101,16 @@ export async function guardarRecibo(
     foto_url = res.ruta;
   }
 
+  const {
+    data: { user },
+  } = await s.auth.getUser();
+
   const { error } = await s.from("recibos_servicios").upsert(
     {
       periodo_id: periodoId,
       tipo,
       monto_cent: monto,
+      registrado_por: user?.id ?? null,
       ...(foto_url ? { foto_url } : {}),
     },
     { onConflict: "periodo_id,tipo" },
@@ -100,7 +118,13 @@ export async function guardarRecibo(
   if (error) return { ok: false, error: mensajeError(error) };
 
   revalidatePath(`/periodos/${periodoId}`);
-  return { ok: true, error: null, mensaje: `Recibo de ${tipo} guardado.` };
+  revalidatePath("/lecturas");
+  revalidatePath("/inicio");
+  return {
+    ok: true,
+    error: null,
+    mensaje: `Recibo de ${tipo} guardado${foto_url ? " con su archivo" : ""}.`,
+  };
 }
 
 // 1.4 · Calcular las cuotas (motor en Postgres). Solo en borrador.
@@ -171,6 +195,32 @@ export async function registrarPago(
 
   const s = createClient();
 
+  // 6.8 · Aviso antes de guardar: el mismo pago dos veces, un dpto que ya pagó
+  // completo, o un monto que se pasa de la cuota. Va ANTES de subir el
+  // comprobante para no dejar archivos huérfanos si se pide confirmación.
+  const { data: cuota } = await s
+    .from("cuotas")
+    .select("dpto_id, total_cent")
+    .eq("id", cuotaId)
+    .maybeSingle();
+  if (!cuota) return { ok: false, error: "No se encontró la cuota." };
+  const { data: previos } = await s
+    .from("pagos")
+    .select("monto_cent, fecha_pago")
+    .eq("cuota_id", cuotaId);
+  const lista = previos ?? [];
+  if (formData.get("confirmar_pago") !== "on") {
+    const aviso = avisoPago({
+      dpto: cuota.dpto_id,
+      totalCent: cuota.total_cent,
+      pagadoCent: lista.reduce((a, p) => a + p.monto_cent, 0),
+      montoCent: monto,
+      fecha,
+      previos: lista,
+    });
+    if (aviso) return { ok: false, error: null, confirmar: aviso };
+  }
+
   let comprobante_url: string | undefined;
   const archivo = archivoConContenido(formData.get("comprobante"));
   if (archivo) {
@@ -184,18 +234,31 @@ export async function registrarPago(
     comprobante_url = res.ruta;
   }
 
-  const { error } = await s.from("pagos").insert({
-    cuota_id: cuotaId,
-    monto_cent: monto,
-    fecha_pago: fecha,
-    medio,
-    nota,
-    ...(comprobante_url ? { comprobante_url } : {}),
-  });
+  const { data: creado, error } = await s
+    .from("pagos")
+    .insert({
+      cuota_id: cuotaId,
+      monto_cent: monto,
+      fecha_pago: fecha,
+      medio,
+      nota,
+      ...(comprobante_url ? { comprobante_url } : {}),
+    })
+    .select("id")
+    .single();
   if (error) return { ok: false, error: mensajeError(error) };
 
   if (periodoId !== null) revalidatePath(`/periodos/${periodoId}`);
-  return { ok: true, error: null, mensaje: "Pago registrado." };
+  revalidatePath("/inicio");
+  return {
+    ok: true,
+    error: null,
+    mensaje: "Pago registrado.",
+    hecho: {
+      id: creado.id,
+      detalle: `Pago del dpto ${cuota.dpto_id} · ${formatoPEN(monto)} · ${formatoFecha(fecha)} · ${MEDIO_TEXTO[medio]}`,
+    },
+  };
 }
 
 // 3.2 · Crear una cuota extraordinaria (derrama) en el borrador: se guarda como

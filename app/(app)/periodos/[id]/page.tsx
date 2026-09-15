@@ -27,7 +27,7 @@ import { FlujoMes } from "@/components/FlujoMes";
 import { Progreso } from "@/components/Progreso";
 import { FormRecibo } from "@/components/forms/recibo";
 import { FormAccionPeriodo } from "@/components/forms/periodo";
-import { FormPago } from "@/components/forms/pago";
+import { CobranzaDpto } from "@/components/CobranzaDpto";
 import { IconoFlecha, IconoCheck, IconoAlerta, IconoGota } from "@/components/iconos";
 import { FormAnularPago } from "@/components/forms/anular-pago";
 import { FormDerrama, FormEliminarDerrama } from "@/components/forms/derrama";
@@ -730,29 +730,17 @@ async function PagosSection({
                 </ul>
               )}
 
-              {saldo <= 0 ? (
-                <p className="mt-1 flex items-center gap-1 text-sm font-medium text-emerald-700">
-                  <IconoCheck className="h-4 w-4" />
-                  Pagado
-                </p>
-              ) : (
-                <details className="group" open={abrirPago}>
-                  <summary className="mt-1 flex cursor-pointer list-none items-center gap-1 text-sm font-semibold text-slate-700 hover:text-slate-900">
-                    <IconoFlecha className="h-3.5 w-3.5 transition-transform group-open:rotate-90" />
-                    Registrar pago
-                    <span className="num font-normal text-slate-500">
-                      (debe {formatoPEN(saldo)})
-                    </span>
-                  </summary>
-                  <FormPago
-                    accion={registrarPago}
-                    periodoId={periodoId}
-                    cuotaId={c.id}
-                    saldoPendienteCent={saldo}
-                    fechaHoy={hoy}
-                  />
-                </details>
-              )}
+              {/* 6.8 · Formulario, "Pagado" o la confirmación grande con Deshacer */}
+              <CobranzaDpto
+                periodoId={periodoId}
+                cuotaId={c.id}
+                dpto={c.dpto_id}
+                saldoPendienteCent={saldo}
+                fechaHoy={hoy}
+                abrirPago={abrirPago}
+                accion={registrarPago}
+                accionAnular={anularPago}
+              />
             </li>
           );
         })}

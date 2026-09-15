@@ -2,11 +2,18 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { getPerfil, ETIQUETA_ROL, menuPara, rolEsRedundante } from "@/lib/roles";
 import { getPeriodoActual, getResumenPeriodo } from "@/lib/periodos";
-import { pasosDelMes, pasoActual } from "@/lib/flujo";
+import { getCategorias, getEgresos, getPeriodoAbierto } from "@/lib/caja";
+import {
+  pasosDelMes,
+  pasoActual,
+  dptosPendientes,
+  tareasRecurrentes,
+} from "@/lib/flujo";
 import { etiquetaPeriodo, formatoFecha, hoyLima } from "@/lib/fechas";
 import { formatoPEN } from "@/lib/centimos";
 import { Progreso } from "@/components/Progreso";
 import { Edificio } from "@/components/Edificio";
+import { ChecklistMes } from "@/components/ChecklistMes";
 import { mapaEdificio } from "@/lib/edificio";
 import { EstadoPeriodoBadge } from "@/components/estados";
 import { ICONOS, IconoFlecha, IconoGota } from "@/components/iconos";
@@ -31,6 +38,34 @@ export default async function InicioPage() {
   const siguiente = pasos ? pasoActual(pasos) : null;
 
   const gestiona = perfil.rol === "tesoreria" || perfil.rol === "admin";
+
+  // 6.9 · Portería también sube los recibos del mes.
+  const nRecibos = resumen ? (resumen.reciboAgua ? 1 : 0) + (resumen.reciboLuz ? 1 : 0) : 0;
+
+  // 6.8 · Checklist completo del mes para tesorería: qué dptos deben y qué
+  // gastos fijos (portero, agua, luz) aún no se registraron en el mes abierto.
+  const hoy = hoyLima();
+  const pendientes = resumen ? dptosPendientes(resumen.cuotas, resumen.pagadoPorCuota) : [];
+  let recurrentes: ReturnType<typeof tareasRecurrentes> = [];
+  if (gestiona && resumen) {
+    const abierto = await getPeriodoAbierto();
+    if (abierto) {
+      const [egresos, categorias] = await Promise.all([
+        getEgresos({ periodoId: abierto.id }),
+        getCategorias(),
+      ]);
+      const nombreCategoria = new Map(categorias.map((c) => [c.id, c.nombre]));
+      recurrentes = tareasRecurrentes(
+        abierto,
+        egresos.map((e) => ({
+          concepto: e.concepto,
+          categoria: e.categoria_id == null ? null : (nombreCategoria.get(e.categoria_id) ?? null),
+          monto_cent: e.monto_cent,
+        })),
+        hoy,
+      );
+    }
+  }
 
   return (
     <main className="flex flex-col gap-5">
@@ -84,10 +119,12 @@ export default async function InicioPage() {
               </h2>
               <p className="text-sm text-slate-500">
                 {resumen.periodo.estado !== "borrador"
-                  ? "Este mes ya está emitido. No hay lecturas pendientes."
-                  : resumen.lecturas === 10
-                    ? "¡Las 10 lecturas están completas! 🎉"
-                    : `Llevas ${resumen.lecturas} de 10 medidores.`}
+                  ? "Este mes ya está emitido. No hay nada pendiente."
+                  : resumen.lecturas === 10 && nRecibos === 2
+                    ? "¡Lecturas y recibos completos! 🎉"
+                    : resumen.lecturas === 10
+                      ? "Las 10 lecturas ya están. Faltan los recibos."
+                      : `Llevas ${resumen.lecturas} de 10 medidores.`}
               </p>
             </div>
           </div>
@@ -96,8 +133,35 @@ export default async function InicioPage() {
               <div className="mt-4">
                 <Progreso valor={resumen.lecturas} max={10} etiqueta="Avance de lecturas" />
               </div>
-              <Link href="/lecturas" className="btn-primary mt-4 w-full">
-                {resumen.lecturas === 10 ? "Revisar lecturas" : "Ingresar lecturas"}
+
+              {/* 6.9 · Los recibos también los sube el portero */}
+              <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+                <span className="text-slate-600">Recibos del mes:</span>
+                <span
+                  className={`chip ${
+                    resumen.reciboAgua ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"
+                  }`}
+                >
+                  💧 agua {resumen.reciboAgua ? "listo" : "falta"}
+                </span>
+                <span
+                  className={`chip ${
+                    resumen.reciboLuz ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"
+                  }`}
+                >
+                  💡 luz {resumen.reciboLuz ? "listo" : "falta"}
+                </span>
+              </div>
+
+              <Link
+                href={resumen.lecturas === 10 && nRecibos < 2 ? "/lecturas#recibos" : "/lecturas"}
+                className="btn-primary mt-4 w-full"
+              >
+                {resumen.lecturas < 10
+                  ? "Ingresar lecturas"
+                  : nRecibos < 2
+                    ? "Subir los recibos"
+                    : "Revisar lecturas y recibos"}
                 <IconoFlecha className="h-4 w-4" />
               </Link>
             </>
@@ -149,6 +213,18 @@ export default async function InicioPage() {
                   <IconoFlecha className="h-4 w-4" />
                 </Link>
               )}
+            </div>
+          )}
+
+          {/* 6.8 · La lista completa del mes, para no tener que recordar nada */}
+          {pasos && resumen.periodo.estado !== "cerrado" && (
+            <div className="mt-5 rounded-2xl border border-slate-200 p-4">
+              <ChecklistMes
+                pasos={pasos}
+                pendientes={pendientes}
+                periodoId={resumen.periodo.id}
+                recurrentes={recurrentes}
+              />
             </div>
           )}
 

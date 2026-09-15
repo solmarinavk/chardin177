@@ -25,7 +25,7 @@ abierta `/transparencia`), no un usuario: solo lectura, sin clave.
 |---|---|---|---|---|
 | Ingresar las 10 lecturas de agua del mes | **X** | (respaldo) | (respaldo) | ve |
 | Subir foto del medidor | **X** | | | |
-| Registrar recibo de agua (Sedapal) y luz | | **X** | (respaldo) | ve |
+| Registrar recibo de agua (Sedapal) y luz | **X** (sube monto y foto/PDF; sólo del mes en preparación, no borra) | **X** (revisa y corrige) | (respaldo) | ve |
 | Calcular cuotas del mes | | **X** | (respaldo) | |
 | Emitir el periodo | | **X** | **X** | ve resultado |
 | Registrar pagos de cuotas + comprobante | | **X** | (respaldo) | ve |
@@ -44,7 +44,7 @@ interfaz; a nivel de datos sigue siendo un usuario autenticado (ver nota de segu
 ## Reglas anti-duplicación (lo que pediste)
 
 1. **La lectura anterior NUNCA se digita.** El sistema la jala automáticamente de la lectura actual del mes anterior. El portero solo ingresa la lectura ACTUAL de cada dpto. (Verificar en la app: en la prueba de julio se ingresaron ambas; el primer mes es la única excepción porque no hay mes previo, ahí sí se carga la base una vez.)
-2. **El recibo se sube una vez** (tesorería) y de ahí la cuota de agua se calcula sola por consumo. Nadie más lo toca.
+2. **El recibo se sube una vez** (el portero, que es quien lo recibe, o tesorería) y de ahí la cuota de agua se calcula sola por consumo. Una vez emitido el mes, nadie lo toca.
 3. **La cuota no se digita:** se calcula del recibo + lecturas + cuotas fijas. El único input humano son esos datos base.
 4. **El saldo inicial de caja no se digita:** es el saldo final del mes anterior, automático.
 5. **El pago cambia el estado solo:** al registrar un pago, el semáforo y el estado (pendiente/parcial/pagado) se recalculan sin intervención.

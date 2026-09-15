@@ -15,11 +15,16 @@ export function CampoFoto({
   name,
   etiqueta = "Agregar foto (opcional)",
   camara = false,
+  acepta = "image/*",
 }: {
   id: string;
   name: string;
   etiqueta?: string;
   camara?: boolean;
+  // Tipos de archivo admitidos. Los recibos llegan como PDF (Sedapal por la
+  // web), así que ahí se pasa "image/*,application/pdf". Los PDF no se
+  // comprimen: comprimirImagen los devuelve tal cual.
+  acepta?: string;
 }) {
   const [nombre, setNombre] = useState<string | null>(null);
   const [preparando, setPreparando] = useState(false);
@@ -50,7 +55,7 @@ export function CampoFoto({
         id={id}
         name={name}
         type="file"
-        accept="image/*"
+        accept={acepta}
         {...(camara ? { capture: "environment" as const } : {})}
         className="peer sr-only"
         onChange={alElegir}

@@ -70,16 +70,60 @@ describe("RLS por rol (flujo real del mes)", () => {
     expect(n.rows[0]!.n).toBe(2);
   });
 
-  it("portería NO puede crear periodos, recibos ni egresos", async () => {
+  it("portería SÍ registra los recibos del mes en preparación, pero no los borra (6.9)", async () => {
+    // El de luz lo cargó tesorería arriba: se quita para que lo suba portería.
+    await db.query(
+      `delete from recibos_servicios where periodo_id = $1 and tipo = 'luz'`,
+      [periodoId],
+    );
+
+    await actuarComo(db, UID.porteria);
+    // Sube el recibo de luz (insert).
+    await db.query(
+      `insert into recibos_servicios (periodo_id, tipo, monto_cent, registrado_por)
+       values ($1, 'luz', $2, $3)`,
+      [periodoId, junio.recibo_luz_cent, UID.porteria],
+    );
+    // Corrige el monto del agua (update) y lo deja como estaba.
+    await db.query(
+      `update recibos_servicios set monto_cent = monto_cent + 100
+       where periodo_id = $1 and tipo = 'agua'`,
+      [periodoId],
+    );
+    await db.query(
+      `update recibos_servicios set monto_cent = $2 where periodo_id = $1 and tipo = 'agua'`,
+      [periodoId, junio.recibo_agua_cent],
+    );
+    // DELETE sin política: no da error, simplemente no borra nada.
+    await db.query(`delete from recibos_servicios where periodo_id = $1`, [periodoId]);
+    await actuarComoServidor(db);
+
+    const filas = await db.query<{
+      tipo: string;
+      monto_cent: number;
+      registrado_por: string | null;
+    }>(
+      `select tipo, monto_cent::int as monto_cent, registrado_por
+         from recibos_servicios where periodo_id = $1 order by tipo`,
+      [periodoId],
+    );
+    expect(filas.rows.map((f) => f.tipo)).toEqual(["agua", "luz"]);
+    expect(filas.rows.find((f) => f.tipo === "luz")?.registrado_por).toBe(UID.porteria);
+    expect(filas.rows.find((f) => f.tipo === "agua")?.monto_cent).toBe(junio.recibo_agua_cent);
+
+    // Todo quedó en la bitácora a nombre de portería (1 insert + 2 updates).
+    const audit = await db.query<{ n: number }>(
+      `select count(*)::int as n from audit_log
+        where tabla = 'recibos_servicios' and usuario = $1`,
+      [UID.porteria],
+    );
+    expect(audit.rows[0]!.n).toBe(3);
+  });
+
+  it("portería NO puede crear periodos ni egresos", async () => {
     await actuarComo(db, UID.porteria);
     await expect(
       db.query(`insert into periodos (anio, mes) values (2030, 1)`),
-    ).rejects.toThrow(/row-level security/);
-    await expect(
-      db.query(
-        `insert into recibos_servicios (periodo_id, tipo, monto_cent) values ($1, 'agua', 1)`,
-        [periodoId],
-      ),
     ).rejects.toThrow(/row-level security/);
     await expect(
       db.query(
@@ -136,7 +180,20 @@ describe("RLS por rol (flujo real del mes)", () => {
         [periodoId],
       ),
     ).rejects.toThrow(/row-level security/);
+    // Tampoco los recibos (6.9 abrió la puerta sólo a portería).
+    await db.query(`delete from recibos_servicios where periodo_id = $1`, [periodoId]);
+    await expect(
+      db.query(
+        `insert into recibos_servicios (periodo_id, tipo, monto_cent) values ($1, 'agua', 1)`,
+        [periodoId],
+      ),
+    ).rejects.toThrow(/row-level security|duplicate/);
     await actuarComoServidor(db);
+    const recibos = await db.query<{ n: number }>(
+      `select count(*)::int as n from recibos_servicios where periodo_id = $1`,
+      [periodoId],
+    );
+    expect(recibos.rows[0]!.n).toBe(2); // el delete del residente no borró nada
   });
 
   it("tesorería PUEDE correr el motor y emitir (funciones bajo RLS)", async () => {
@@ -154,6 +211,17 @@ describe("RLS por rol (flujo real del mes)", () => {
       [periodoId],
     );
     expect(p.rows[0]!.estado).toBe("emitido");
+  });
+
+  it("portería NO puede tocar los recibos de un mes ya emitido (candado de inmutabilidad)", async () => {
+    await actuarComo(db, UID.porteria);
+    await expect(
+      db.query(
+        `update recibos_servicios set monto_cent = 1 where periodo_id = $1 and tipo = 'agua'`,
+        [periodoId],
+      ),
+    ).rejects.toThrow(/emitido/);
+    await actuarComoServidor(db);
   });
 
   it("tesorería registra un pago y la cuota pasa a 'pagado' (regresión: trigger de estado bajo RLS)", async () => {

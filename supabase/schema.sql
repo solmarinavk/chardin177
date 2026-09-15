@@ -143,7 +143,10 @@ create table egresos (
   periodo_id bigint not null references periodos(id),
   categoria_id smallint references categorias_egreso(id),
   concepto text not null,
-  monto_cent integer not null check (monto_cent >= 0),
+  -- Positivo = sale plata de la caja. Negativo = corrección que la devuelve
+  -- (p. ej. anular un gasto duplicado de un mes ya cerrado, que no se puede
+  -- borrar). Nunca 0. Ver migración 0011.
+  monto_cent integer not null check (monto_cent <> 0),
   fecha date not null,
   pagado boolean not null default true,
   comprobante_url text,
@@ -548,6 +551,13 @@ create policy w_lecturas on lecturas_agua for all to authenticated
 
 create policy w_recibos on recibos_servicios for all to authenticated
   using (mi_rol() in ('tesoreria','admin')) with check (mi_rol() in ('tesoreria','admin'));
+-- 6.9 · Portería carga y corrige los recibos del mes en preparación (los
+-- recibe él). Sólo insert/update, nunca delete; el trigger tg_lock_recibos
+-- impide tocar meses emitidos o cerrados. Ver migración 0012.
+create policy ins_recibos_porteria on recibos_servicios for insert to authenticated
+  with check (mi_rol() = 'porteria');
+create policy upd_recibos_porteria on recibos_servicios for update to authenticated
+  using (mi_rol() = 'porteria') with check (mi_rol() = 'porteria');
 create policy w_pagos on pagos for all to authenticated
   using (mi_rol() in ('tesoreria','admin')) with check (mi_rol() in ('tesoreria','admin'));
 create policy w_egresos on egresos for all to authenticated

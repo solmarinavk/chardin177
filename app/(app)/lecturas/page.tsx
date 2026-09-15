@@ -7,11 +7,16 @@ import {
   getLecturas,
   getLecturasAnteriores,
   getPromediosConsumo,
+  getRecibos,
+  getRecibosMesAnterior,
+  type Periodo,
 } from "@/lib/periodos";
 import { etiquetaPeriodo } from "@/lib/fechas";
-import { BUCKET_MEDIDORES, urlFirmada } from "@/lib/storage";
+import { BUCKET_MEDIDORES, BUCKET_COMPROBANTES, urlFirmada } from "@/lib/storage";
 import { FormLecturas, type FilaLectura } from "@/components/forms/lecturas";
+import { FormRecibo } from "@/components/forms/recibo";
 import { guardarLecturas, autoguardarLectura } from "./acciones";
+import { guardarRecibo } from "../periodos/acciones";
 
 export const metadata: Metadata = { title: "Lecturas de agua" };
 
@@ -92,6 +97,63 @@ export default async function LecturasPage() {
       </div>
 
       <FormLecturas accion={guardarLecturas} autoguardar={autoguardarLectura} periodoId={borrador.id} filas={filas} />
+
+      <RecibosDelMes borrador={borrador} />
     </main>
+  );
+}
+
+// 6.9 · Los recibos le llegan al portero: los sube aquí mismo (monto + foto o
+// PDF), en la misma pantalla de las lecturas. Tesorería los ve en el periodo
+// con el monto del mes pasado de referencia, y sigue siendo quien calcula y
+// emite. Sólo se puede sobre el mes en preparación.
+async function RecibosDelMes({ borrador }: { borrador: Periodo }) {
+  const [recibos, anteriores] = await Promise.all([
+    getRecibos(borrador.id),
+    getRecibosMesAnterior(borrador),
+  ]);
+  const fotoAgua = recibos.agua?.foto_url
+    ? await urlFirmada(BUCKET_COMPROBANTES, recibos.agua.foto_url)
+    : null;
+  const fotoLuz = recibos.luz?.foto_url
+    ? await urlFirmada(BUCKET_COMPROBANTES, recibos.luz.foto_url)
+    : null;
+  const cargados = (recibos.agua ? 1 : 0) + (recibos.luz ? 1 : 0);
+
+  return (
+    <section id="recibos" className="card animar-aparecer scroll-mt-24 p-5">
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="text-lg font-bold text-slate-900">Recibos del mes</h2>
+        <span
+          className={`chip ${
+            cargados === 2 ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-600"
+          }`}
+        >
+          {cargados} de 2
+        </span>
+      </div>
+      <p className="mt-1 text-sm text-slate-600">
+        Cuando llegue el recibo de agua o el de luz, escribe el <strong>monto total</strong>{" "}
+        y sube la foto o el PDF. Con eso tesorería calcula las cuotas del mes.
+      </p>
+      <div className="mt-4 flex flex-col gap-4">
+        <FormRecibo
+          accion={guardarRecibo}
+          periodoId={borrador.id}
+          tipo="agua"
+          montoActualCent={recibos.agua?.monto_cent ?? null}
+          montoAnteriorCent={anteriores.agua?.monto_cent ?? null}
+          fotoUrl={fotoAgua}
+        />
+        <FormRecibo
+          accion={guardarRecibo}
+          periodoId={borrador.id}
+          tipo="luz"
+          montoActualCent={recibos.luz?.monto_cent ?? null}
+          montoAnteriorCent={anteriores.luz?.monto_cent ?? null}
+          fotoUrl={fotoLuz}
+        />
+      </div>
+    </section>
   );
 }
