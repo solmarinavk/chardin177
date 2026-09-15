@@ -175,10 +175,21 @@ escriben**: administración, tesorería y portería. Ver `docs/MATRIZ_ROLES.md`.
   conceptos más repetidos, con la categoría y el monto de la última vez) que llenan el
   formulario de egreso (`lib/gastos-frecuentes.ts`). 36 tests nuevos (176 en total).
 
-> **Lo que corres tú:** aplicar las migraciones `0010_ocurrencias.sql` y
-> `0011_egresos_correccion.sql` en Supabase → SQL Editor, y hacer merge + re-deploy en
-> Netlify. No hay pasos manuales en el dashboard. _(Los fixes 6.5, 6.6 y 6.8 solo necesitan
-> merge + re-deploy; el 6.7 sí necesita la migración `0011`.)_
+- [x] 6.9 **Percy sube los recibos de agua y luz** (migración `0012`). Los recibos le llegan al
+  portero (Sedapal por la web, Luz del Sur en papel) y hasta ahora tenía que mandarlos por
+  WhatsApp para que tesorería los digitara: un paso más y otra persona escribiendo montos a
+  mano. Ahora en su pantalla de **Lecturas** hay una sección "Recibos del mes" donde sube el
+  monto y la **foto o el PDF** (los campos de archivo ya admiten PDF); en su inicio ve
+  "Recibos del mes: 💧 agua · 💡 luz" y el botón le dice qué falta. Tesorería los ve en el
+  periodo con la referencia del mes pasado y sigue siendo quien calcula y emite. Permisos
+  acotados: portería sólo **inserta y corrige** (nunca borra) y el candado `tg_lock_recibos`
+  impide tocar meses emitidos o cerrados; queda en la bitácora con `registrado_por`. Tests RLS
+  actualizados (`tests/rls.test.ts`) y `docs/MATRIZ_ROLES.md` al día.
+
+> **Lo que corres tú:** aplicar las migraciones `0010_ocurrencias.sql`,
+> `0011_egresos_correccion.sql` y `0012_recibos_porteria.sql` en Supabase → SQL Editor, y
+> hacer merge + re-deploy en Netlify. No hay pasos manuales en el dashboard. _(Los fixes 6.5,
+> 6.6 y 6.8 solo necesitan merge + re-deploy; el 6.7 necesita la `0011` y el 6.9 la `0012`.)_
 
 ## Backlog (ideas futuras, no bloquean nada)
 

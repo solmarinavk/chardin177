@@ -51,7 +51,8 @@ export function pasosDelMes(p: PeriodoLite, d: DatosFlujo): Paso[] {
     {
       clave: "recibos",
       titulo: "Recibos del mes",
-      descripcion: "Tesorería registra el monto de agua (Sedapal) y luz común.",
+      descripcion:
+        "El portero o tesorería registran el monto del recibo de agua (Sedapal) y el de luz, con la foto o el PDF.",
       detalle: `${nRecibos}/2`,
       estado: emitidoOCerrado || recibosListos ? "hecho" : "pendiente",
       href: `${base}#recibos`,

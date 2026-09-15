@@ -39,6 +39,9 @@ export default async function InicioPage() {
 
   const gestiona = perfil.rol === "tesoreria" || perfil.rol === "admin";
 
+  // 6.9 · Portería también sube los recibos del mes.
+  const nRecibos = resumen ? (resumen.reciboAgua ? 1 : 0) + (resumen.reciboLuz ? 1 : 0) : 0;
+
   // 6.8 · Checklist completo del mes para tesorería: qué dptos deben y qué
   // gastos fijos (portero, agua, luz) aún no se registraron en el mes abierto.
   const hoy = hoyLima();
@@ -116,10 +119,12 @@ export default async function InicioPage() {
               </h2>
               <p className="text-sm text-slate-500">
                 {resumen.periodo.estado !== "borrador"
-                  ? "Este mes ya está emitido. No hay lecturas pendientes."
-                  : resumen.lecturas === 10
-                    ? "¡Las 10 lecturas están completas! 🎉"
-                    : `Llevas ${resumen.lecturas} de 10 medidores.`}
+                  ? "Este mes ya está emitido. No hay nada pendiente."
+                  : resumen.lecturas === 10 && nRecibos === 2
+                    ? "¡Lecturas y recibos completos! 🎉"
+                    : resumen.lecturas === 10
+                      ? "Las 10 lecturas ya están. Faltan los recibos."
+                      : `Llevas ${resumen.lecturas} de 10 medidores.`}
               </p>
             </div>
           </div>
@@ -128,8 +133,35 @@ export default async function InicioPage() {
               <div className="mt-4">
                 <Progreso valor={resumen.lecturas} max={10} etiqueta="Avance de lecturas" />
               </div>
-              <Link href="/lecturas" className="btn-primary mt-4 w-full">
-                {resumen.lecturas === 10 ? "Revisar lecturas" : "Ingresar lecturas"}
+
+              {/* 6.9 · Los recibos también los sube el portero */}
+              <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+                <span className="text-slate-600">Recibos del mes:</span>
+                <span
+                  className={`chip ${
+                    resumen.reciboAgua ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"
+                  }`}
+                >
+                  💧 agua {resumen.reciboAgua ? "listo" : "falta"}
+                </span>
+                <span
+                  className={`chip ${
+                    resumen.reciboLuz ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"
+                  }`}
+                >
+                  💡 luz {resumen.reciboLuz ? "listo" : "falta"}
+                </span>
+              </div>
+
+              <Link
+                href={resumen.lecturas === 10 && nRecibos < 2 ? "/lecturas#recibos" : "/lecturas"}
+                className="btn-primary mt-4 w-full"
+              >
+                {resumen.lecturas < 10
+                  ? "Ingresar lecturas"
+                  : nRecibos < 2
+                    ? "Subir los recibos"
+                    : "Revisar lecturas y recibos"}
                 <IconoFlecha className="h-4 w-4" />
               </Link>
             </>

@@ -78,7 +78,8 @@ export function FormRecibo({
         <CampoFoto
           id={`foto_${tipo}`}
           name="foto"
-          etiqueta="Foto del recibo (opcional)"
+          etiqueta="Foto o PDF del recibo (opcional)"
+          acepta="image/*,application/pdf"
         />
         {fotoUrl && (
           <a
@@ -87,7 +88,7 @@ export function FormRecibo({
             rel="noreferrer"
             className="mt-1 inline-block text-xs font-semibold text-slate-500 underline hover:text-slate-900"
           >
-            Ver la foto ya guardada
+            Ver el recibo ya guardado
           </a>
         )}
       </div>

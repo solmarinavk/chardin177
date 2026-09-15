@@ -69,12 +69,14 @@ export async function crearPeriodo(
   redirect(`/periodos/${data.id}`);
 }
 
-// 1.3 · Guardar el monto de un recibo (agua o luz) del periodo, con foto opcional.
+// 1.3 · Guardar el monto de un recibo (agua o luz) del periodo, con foto o PDF.
+// 6.9 · Portería también puede: los recibos le llegan al portero. Sólo sobre el
+// mes en preparación (lo garantiza el trigger tg_lock_recibos) y nunca borra.
 export async function guardarRecibo(
   _prev: EstadoForm,
   formData: FormData,
 ): Promise<EstadoForm> {
-  await requireRol(TESORERIA);
+  await requireRol(["porteria", "tesoreria", "admin"]);
   const periodoId = enteroDesdeInput(formData.get("periodo_id"));
   const tipoRaw = String(formData.get("tipo") ?? "");
   const monto = centimosDesdeInput(formData.get("monto"));
@@ -99,11 +101,16 @@ export async function guardarRecibo(
     foto_url = res.ruta;
   }
 
+  const {
+    data: { user },
+  } = await s.auth.getUser();
+
   const { error } = await s.from("recibos_servicios").upsert(
     {
       periodo_id: periodoId,
       tipo,
       monto_cent: monto,
+      registrado_por: user?.id ?? null,
       ...(foto_url ? { foto_url } : {}),
     },
     { onConflict: "periodo_id,tipo" },
@@ -111,7 +118,13 @@ export async function guardarRecibo(
   if (error) return { ok: false, error: mensajeError(error) };
 
   revalidatePath(`/periodos/${periodoId}`);
-  return { ok: true, error: null, mensaje: `Recibo de ${tipo} guardado.` };
+  revalidatePath("/lecturas");
+  revalidatePath("/inicio");
+  return {
+    ok: true,
+    error: null,
+    mensaje: `Recibo de ${tipo} guardado${foto_url ? " con su archivo" : ""}.`,
+  };
 }
 
 // 1.4 · Calcular las cuotas (motor en Postgres). Solo en borrador.

@@ -551,6 +551,13 @@ create policy w_lecturas on lecturas_agua for all to authenticated
 
 create policy w_recibos on recibos_servicios for all to authenticated
   using (mi_rol() in ('tesoreria','admin')) with check (mi_rol() in ('tesoreria','admin'));
+-- 6.9 · Portería carga y corrige los recibos del mes en preparación (los
+-- recibe él). Sólo insert/update, nunca delete; el trigger tg_lock_recibos
+-- impide tocar meses emitidos o cerrados. Ver migración 0012.
+create policy ins_recibos_porteria on recibos_servicios for insert to authenticated
+  with check (mi_rol() = 'porteria');
+create policy upd_recibos_porteria on recibos_servicios for update to authenticated
+  using (mi_rol() = 'porteria') with check (mi_rol() = 'porteria');
 create policy w_pagos on pagos for all to authenticated
   using (mi_rol() in ('tesoreria','admin')) with check (mi_rol() in ('tesoreria','admin'));
 create policy w_egresos on egresos for all to authenticated
