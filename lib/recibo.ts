@@ -30,14 +30,16 @@ export function textoResumenMes(
 ): string {
   const orden = [...cuotas].sort((a, b) => a.dpto_id - b.dpto_id);
 
+  // Cada línea arranca con el color del semáforo: en un grupo de WhatsApp se
+  // lee de un vistazo quién falta, sin leer la palabra (pedido 16/09/2026).
   const lineas = orden.map((c) => {
     const pagado = pagadoPorCuota.get(c.id) ?? (c.estado === "pagado" ? c.total_cent : 0);
     const saldo = c.total_cent - pagado;
     if (c.estado === "pagado")
-      return `Dpto ${c.dpto_id}: ${formatoPEN(c.total_cent)} — PAGADO ✓`;
+      return `✅ Dpto ${c.dpto_id}: ${formatoPEN(c.total_cent)} — PAGADO`;
     if (c.estado === "parcial")
-      return `Dpto ${c.dpto_id}: debe ${formatoPEN(saldo)} de ${formatoPEN(c.total_cent)} — PARCIAL`;
-    return `Dpto ${c.dpto_id}: ${formatoPEN(c.total_cent)} — PENDIENTE`;
+      return `🟡 Dpto ${c.dpto_id}: debe ${formatoPEN(saldo)} de ${formatoPEN(c.total_cent)} — PARCIAL`;
+    return `🔴 Dpto ${c.dpto_id}: ${formatoPEN(c.total_cent)} — PENDIENTE`;
   });
 
   let recaudado = 0;
