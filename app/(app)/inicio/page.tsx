@@ -2,18 +2,26 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { getPerfil, ETIQUETA_ROL, menuPara, rolEsRedundante } from "@/lib/roles";
 import { getPeriodoActual, getResumenPeriodo } from "@/lib/periodos";
-import { getCategorias, getEgresos, getPeriodoAbierto } from "@/lib/caja";
+import {
+  getCategorias,
+  getEgresos,
+  getPeriodoAbierto,
+  getDeudasPorDpto,
+} from "@/lib/caja";
 import {
   pasosDelMes,
   pasoActual,
   dptosPendientes,
   tareasRecurrentes,
+  pagosAtrasados,
+  type PagoAtrasado,
 } from "@/lib/flujo";
 import { etiquetaPeriodo, formatoFecha, hoyLima } from "@/lib/fechas";
 import { formatoPEN } from "@/lib/centimos";
 import { Progreso } from "@/components/Progreso";
 import { Edificio } from "@/components/Edificio";
 import { ChecklistMes } from "@/components/ChecklistMes";
+import { PagosAtrasados } from "@/components/PagosAtrasados";
 import { mapaEdificio } from "@/lib/edificio";
 import { EstadoPeriodoBadge } from "@/components/estados";
 import { ICONOS, IconoFlecha, IconoGota } from "@/components/iconos";
@@ -47,6 +55,11 @@ export default async function InicioPage() {
   const hoy = hoyLima();
   const pendientes = resumen ? dptosPendientes(resumen.cuotas, resumen.pagadoPorCuota) : [];
   let recurrentes: ReturnType<typeof tareasRecurrentes> = [];
+  // 6.10 · Cuotas de meses ya cerrados que siguen sin pagar.
+  let atrasados: PagoAtrasado[] = [];
+  if (gestiona) {
+    atrasados = pagosAtrasados(await getDeudasPorDpto());
+  }
   if (gestiona && resumen) {
     const abierto = await getPeriodoAbierto();
     if (abierto) {
@@ -268,6 +281,9 @@ export default async function InicioPage() {
           </Link>
         </section>
       )}
+
+      {/* ——— 6.10 · Pagos atrasados de meses cerrados ——— */}
+      {gestiona && <PagosAtrasados atrasados={atrasados} />}
 
       {/* ——— Las cuentas del edificio (página pública): el enlace de WhatsApp ——— */}
       <section

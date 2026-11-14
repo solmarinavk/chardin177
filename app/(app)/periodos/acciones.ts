@@ -250,6 +250,8 @@ export async function registrarPago(
 
   if (periodoId !== null) revalidatePath(`/periodos/${periodoId}`);
   revalidatePath("/inicio");
+  revalidatePath("/caja");
+  revalidatePath("/estado-cuenta");
   return {
     ok: true,
     error: null,
@@ -413,5 +415,8 @@ export async function anularPago(
     return { ok: false, error: "No se encontró el pago (¿ya fue anulado?)." };
 
   if (periodoId !== null) revalidatePath(`/periodos/${periodoId}`);
+  revalidatePath("/inicio");
+  revalidatePath("/caja");
+  revalidatePath("/estado-cuenta");
   return { ok: true, error: null, mensaje: "Pago anulado." };
 }

@@ -5,6 +5,8 @@ import {
   dptosPendientes,
   quincenasEsperadas,
   tareasRecurrentes,
+  pagosAtrasados,
+  totalAtrasadoCent,
 } from "@/lib/flujo";
 
 // El checklist del mes (6.8) existe para que la tesorera no tenga que
@@ -169,5 +171,63 @@ describe("pasosDelMes (el GPS que ya existía)", () => {
       cuotasPagadas: 10,
     });
     expect(pasoActual(pasos)?.clave).toBe("cerrar");
+  });
+});
+
+// 6.10 · Pagos atrasados: un vecino pagó octubre después del cierre y no había
+// dónde registrarlo. La lista sale solo de meses CERRADOS; lo del mes en
+// cobranza ya está en el checklist.
+describe("pagosAtrasados", () => {
+  const deudas = [
+    {
+      dpto: 302,
+      cuotas: [
+        { periodoId: 66, anio: 2026, mes: 9, estado: "cerrado", saldoCent: 59782 },
+        { periodoId: 67, anio: 2026, mes: 10, estado: "cerrado", saldoCent: 60804 },
+        { periodoId: 68, anio: 2026, mes: 11, estado: "emitido", saldoCent: 61000 },
+      ],
+    },
+    {
+      dpto: 101,
+      cuotas: [{ periodoId: 67, anio: 2026, mes: 10, estado: "cerrado", saldoCent: 10000 }],
+    },
+  ];
+
+  it("solo trae meses cerrados; el mes en cobranza se queda fuera", () => {
+    const lista = pagosAtrasados(deudas);
+    expect(lista.every((a) => a.mes !== 11)).toBe(true);
+    expect(lista).toHaveLength(3);
+  });
+
+  it("ordena del más antiguo al más nuevo, y a igual mes por dpto", () => {
+    expect(pagosAtrasados(deudas).map((a) => `${a.mes}-${a.dpto}`)).toEqual([
+      "9-302",
+      "10-101",
+      "10-302",
+    ]);
+  });
+
+  it("cada fila trae el periodo para poder enlazar al formulario de pago", () => {
+    const [primero] = pagosAtrasados(deudas);
+    expect(primero).toEqual({
+      dpto: 302,
+      periodoId: 66,
+      anio: 2026,
+      mes: 9,
+      saldoCent: 59782,
+    });
+  });
+
+  it("suma el total atrasado", () => {
+    expect(totalAtrasadoCent(pagosAtrasados(deudas))).toBe(59782 + 60804 + 10000);
+  });
+
+  it("sin deudas de meses cerrados, lista vacía (y el componente no se muestra)", () => {
+    expect(pagosAtrasados([])).toEqual([]);
+    expect(
+      pagosAtrasados([
+        { dpto: 101, cuotas: [{ periodoId: 68, anio: 2026, mes: 11, estado: "emitido", saldoCent: 1 }] },
+      ]),
+    ).toEqual([]);
   });
 });

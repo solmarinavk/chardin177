@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
-import type { Database, Tables } from "@/lib/database.types";
+import type { Database, Tables, EstadoPeriodo } from "@/lib/database.types";
 import type { Periodo } from "@/lib/periodos";
 import { prorratear } from "@/lib/centimos";
 
@@ -134,8 +134,10 @@ export async function getCierres(): Promise<Periodo[]> {
 
 // ---------- Morosidad (2.5) ----------
 export type DeudaCuota = {
+  periodoId: number;
   anio: number;
   mes: number;
+  estado: EstadoPeriodo; // emitido (el mes en cobranza) o cerrado (atrasado)
   saldoCent: number;
 };
 export type DeudaDpto = {
@@ -151,7 +153,7 @@ export async function getDeudasPorDpto(
   const s = client ?? createClient();
   const { data: periodos } = await s
     .from("periodos")
-    .select("id, anio, mes")
+    .select("id, anio, mes, estado")
     .in("estado", ["emitido", "cerrado"]);
   const infoPeriodo = new Map((periodos ?? []).map((p) => [p.id, p]));
   const ids = [...infoPeriodo.keys()];
@@ -179,7 +181,13 @@ export async function getDeudasPorDpto(
     if (saldo <= 0) continue;
     const p = infoPeriodo.get(c.periodo_id)!;
     const lista = porDpto.get(c.dpto_id) ?? [];
-    lista.push({ anio: p.anio, mes: p.mes, saldoCent: saldo });
+    lista.push({
+      periodoId: p.id,
+      anio: p.anio,
+      mes: p.mes,
+      estado: p.estado,
+      saldoCent: saldo,
+    });
     porDpto.set(c.dpto_id, lista);
   }
 
