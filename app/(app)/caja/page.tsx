@@ -8,7 +8,10 @@ import {
   getLibroCaja,
   getPeriodoAbierto,
   getCierres,
+  getDeudasPorDpto,
 } from "@/lib/caja";
+import { pagosAtrasados } from "@/lib/flujo";
+import { PagosAtrasados } from "@/components/PagosAtrasados";
 import { etiquetaPeriodo, formatoFecha, hoyLima } from "@/lib/fechas";
 import { formatoPEN } from "@/lib/centimos";
 import { BUCKET_COMPROBANTES, urlFirmada } from "@/lib/storage";
@@ -45,12 +48,15 @@ export default async function CajaPage({
   const perfil = await requireRol(["tesoreria", "admin"]);
   const gestiona = perfil.rol === "tesoreria" || perfil.rol === "admin";
 
-  const [abierto, periodos, categorias, cierres] = await Promise.all([
+  const [abierto, periodos, categorias, cierres, deudas] = await Promise.all([
     getPeriodoAbierto(),
     listPeriodos(),
     getCategorias(),
     getCierres(),
+    getDeudasPorDpto(),
   ]);
+  // 6.10 · Cuotas de meses cerrados que siguen sin pagar: el botón para cobrarlas.
+  const atrasados = pagosAtrasados(deudas);
 
   const libro = abierto ? await getLibroCaja(abierto) : null;
 
@@ -206,6 +212,9 @@ export default async function CajaPage({
           </p>
         </section>
       )}
+
+      {/* ——— 6.10 · Pagos atrasados de meses cerrados ——— */}
+      {gestiona && <PagosAtrasados atrasados={atrasados} />}
 
       {/* ——— Aviso de gastos repetidos ——— */}
       {gestiona && repetidos.length > 0 && (

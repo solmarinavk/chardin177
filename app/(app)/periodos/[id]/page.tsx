@@ -94,6 +94,14 @@ export default async function PeriodoDetallePage({
   const cuotasGeneradas = resumen.cuotas.length === 10;
   const listoParaGenerar =
     resumen.reciboAgua && resumen.reciboLuz && resumen.lecturas === 10;
+  // 6.10 · En un mes cerrado lo único que queda por hacer es cobrar lo que
+  // quedó debiendo: ahí se muestra la cobranza solo para esos dptos.
+  const hayDeudaPendiente = resumen.cuotas.some(
+    (c) => c.total_cent - (resumen.pagadoPorCuota.get(c.id) ?? 0) > 0,
+  );
+  const cobranzaVisible =
+    gestiona &&
+    (periodo.estado === "emitido" || (periodo.estado === "cerrado" && hayDeudaPendiente));
 
   // URLs firmadas de las fotos de los recibos (buckets privados).
   const fotoAgua = resumen.recibos.agua?.foto_url
@@ -279,13 +287,18 @@ export default async function PeriodoDetallePage({
             <Semaforo
               cuotas={resumen.cuotas}
               pagadoPorCuota={resumen.pagadoPorCuota}
-              conCobro={gestiona && periodo.estado === "emitido"}
+              conCobro={cobranzaVisible}
             />
           </section>
 
-          {/* Registrar pagos */}
-          {gestiona && periodo.estado === "emitido" && (
-            <PagosSection resumen={resumen} periodoId={id} pagarDpto={pagarDpto} />
+          {/* Registrar pagos (6.10: también en meses cerrados, para los atrasados) */}
+          {cobranzaVisible && (
+            <PagosSection
+              resumen={resumen}
+              periodoId={id}
+              pagarDpto={pagarDpto}
+              atrasado={periodo.estado === "cerrado"}
+            />
           )}
 
           {/* Cerrar el mes (2.3) */}
@@ -577,10 +590,13 @@ async function PagosSection({
   resumen,
   periodoId,
   pagarDpto,
+  atrasado = false,
 }: {
   resumen: ResumenPeriodo;
   periodoId: number;
   pagarDpto?: number;
+  // 6.10 · Mes cerrado: solo los dptos que deben, con aviso de a dónde va la plata.
+  atrasado?: boolean;
 }) {
   const hoy = hoyLima();
   const [pagosPorCuota, constancias] = await Promise.all([
@@ -588,6 +604,12 @@ async function PagosSection({
     getConstanciasPendientes(periodoId),
   ]);
   const todoPagado = resumen.cuotas.every((c) => c.estado === "pagado");
+  // En un mes cerrado solo se listan los que quedaron debiendo.
+  const lista = atrasado
+    ? resumen.cuotas.filter(
+        (c) => c.total_cent - (resumen.pagadoPorCuota.get(c.id) ?? 0) > 0,
+      )
+    : resumen.cuotas;
 
   // URLs firmadas de las constancias y saldo sugerido por dpto.
   const urlsConstancia = new Map<number, string>();
@@ -617,8 +639,20 @@ async function PagosSection({
   }
 
   return (
-    <section id="pagos" className="card animar-aparecer scroll-mt-24 p-5">
-      <h2 className="titulo-seccion mb-3">Cobranza</h2>
+    <section
+      id="pagos"
+      className={`card animar-aparecer scroll-mt-24 p-5 ${atrasado ? "border-red-200" : ""}`}
+    >
+      <h2 className="titulo-seccion mb-3">
+        {atrasado ? "Pagos atrasados de este mes" : "Cobranza"}
+      </h2>
+      {atrasado && (
+        <p className="mb-4 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-800">
+          Este mes ya está cerrado y sus cuentas no cambian. Lo que pague ahora
+          el vecino entra a la caja del mes actual, y aquí solo se borra su
+          deuda. Los demás departamentos ya pagaron este mes.
+        </p>
+      )}
 
       {/* 3.7 · Constancias del vecino por confirmar */}
       {constancias.length > 0 && (
@@ -674,7 +708,7 @@ async function PagosSection({
         </p>
       )}
       <ul className="flex flex-col gap-2">
-        {resumen.cuotas.map((c) => {
+        {lista.map((c) => {
           const pagadoCent = resumen.pagadoPorCuota.get(c.id) ?? 0;
           const saldo = c.total_cent - pagadoCent;
           const pagos = pagosPorCuota.get(c.id) ?? [];

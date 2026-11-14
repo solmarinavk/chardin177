@@ -222,3 +222,48 @@ export function tareasRecurrentes(
     },
   ];
 }
+
+// ---------------------------------------------------------------------------
+// Pagos atrasados (6.10): cuotas de meses YA CERRADOS que siguen debiendo.
+//
+// Pasó de verdad (nov-2026): un vecino pagó una cuota de octubre después del
+// cierre y la tesorera no encontró dónde registrarlo, porque la cobranza solo
+// se mostraba en el mes emitido. La base siempre lo aceptó (el pago entra a la
+// caja del mes en curso); faltaba el botón.
+// ---------------------------------------------------------------------------
+
+export type PagoAtrasado = {
+  dpto: number;
+  periodoId: number;
+  anio: number;
+  mes: number;
+  saldoCent: number;
+};
+
+// Aplana las deudas por dpto dejando solo las de meses cerrados, la más
+// antigua primero (y a igual mes, por dpto).
+export function pagosAtrasados(
+  deudas: {
+    dpto: number;
+    cuotas: { periodoId: number; anio: number; mes: number; estado: string; saldoCent: number }[];
+  }[],
+): PagoAtrasado[] {
+  const lista: PagoAtrasado[] = [];
+  for (const d of deudas) {
+    for (const c of d.cuotas) {
+      if (c.estado !== "cerrado" || c.saldoCent <= 0) continue;
+      lista.push({
+        dpto: d.dpto,
+        periodoId: c.periodoId,
+        anio: c.anio,
+        mes: c.mes,
+        saldoCent: c.saldoCent,
+      });
+    }
+  }
+  return lista.sort((a, b) => a.anio * 12 + a.mes - (b.anio * 12 + b.mes) || a.dpto - b.dpto);
+}
+
+export function totalAtrasadoCent(lista: PagoAtrasado[]): number {
+  return lista.reduce((suma, a) => suma + a.saldoCent, 0);
+}

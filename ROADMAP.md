@@ -186,10 +186,23 @@ escriben**: administración, tesorería y portería. Ver `docs/MATRIZ_ROLES.md`.
   impide tocar meses emitidos o cerrados; queda en la bitácora con `registrado_por`. Tests RLS
   actualizados (`tests/rls.test.ts`) y `docs/MATRIZ_ROLES.md` al día.
 
+- [x] 6.10 **Botón para registrar pagos atrasados** (sin migración). Un vecino pagó su cuota de
+  octubre después del cierre y la tesorera no encontró dónde registrarlo: la cobranza solo se
+  mostraba en el mes **emitido**, aunque la base siempre aceptó pagos de meses cerrados (el
+  dinero entra a la caja del mes en curso; `tests/lifecycle.test.ts` lo cubre). Ahora: (a) en
+  el **inicio** y en **Caja** aparece una tarjeta roja "Pagos atrasados de meses anteriores"
+  con cada deuda de un mes cerrado (dpto, mes, antigüedad, monto) y su botón **Registrar
+  pago**; (b) la pantalla de un **mes cerrado** vuelve a mostrar la cobranza, pero solo para
+  los dptos que deben, con el aviso de que la plata entra a la caja del mes actual; (c) en
+  **Estado de cuenta**, cada deuda lleva el mismo botón. Todos llevan al formulario de pago
+  ya abierto (`?pagar=dpto`), con los avisos de pago repetido de 6.8. Lógica pura en
+  `lib/flujo.ts` (`pagosAtrasados`) con tests.
+
 > **Lo que corres tú:** aplicar las migraciones `0010_ocurrencias.sql`,
 > `0011_egresos_correccion.sql` y `0012_recibos_porteria.sql` en Supabase → SQL Editor, y
 > hacer merge + re-deploy en Netlify. No hay pasos manuales en el dashboard. _(Los fixes 6.5,
-> 6.6 y 6.8 solo necesitan merge + re-deploy; el 6.7 necesita la `0011` y el 6.9 la `0012`.)_
+> 6.6, 6.8 y 6.10 solo necesitan merge + re-deploy; el 6.7 necesita la `0011` y el 6.9 la
+> `0012`.)_
 
 ## Backlog (ideas futuras, no bloquean nada)
 

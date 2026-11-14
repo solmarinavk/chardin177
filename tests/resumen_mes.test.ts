@@ -52,10 +52,10 @@ describe("resumen del mes para WhatsApp", () => {
     expect(i201).toBeLessThan(i301);
   });
 
-  it("estados con su formato: pagado ✓, parcial con deuda, pendiente con total", () => {
-    expect(texto).toContain("Dpto 201: S/ 458.13 — PAGADO ✓");
-    expect(texto).toContain("Dpto 301: debe S/ 177.48 de S/ 443.70 — PARCIAL");
-    expect(texto).toContain("Dpto 101: S/ 432.16 — PENDIENTE");
+  it("cada línea arranca con el color del semáforo y su estado", () => {
+    expect(texto).toContain("✅ Dpto 201: S/ 458.13 — PAGADO");
+    expect(texto).toContain("🟡 Dpto 301: debe S/ 177.48 de S/ 443.70 — PARCIAL");
+    expect(texto).toContain("🔴 Dpto 101: S/ 432.16 — PENDIENTE");
   });
 
   it("recaudado en negrita + conteo con emojis", () => {
@@ -74,7 +74,7 @@ describe("resumen del mes para WhatsApp", () => {
 
   it("cuota pagada sin detalle de pagos cuenta como recaudada (sin deuda falsa)", () => {
     const t = textoResumenMes(2026, 7, [cuota(9, 102, 46968, "pagado")], new Map());
-    expect(t).toContain("Dpto 102: S/ 469.68 — PAGADO ✓");
+    expect(t).toContain("✅ Dpto 102: S/ 469.68 — PAGADO");
     expect(t).toContain("*Recaudado: S/ 469.68 de S/ 469.68*");
   });
 });

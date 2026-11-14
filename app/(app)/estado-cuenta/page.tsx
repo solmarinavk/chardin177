@@ -182,8 +182,17 @@ export default async function EstadoCuentaPage() {
                                     : `hace ${textoAntiguedad(mesesDesde(c.anio, c.mes))}`}
                                 </span>
                               </span>
-                              <span className="font-semibold text-slate-900">
-                                {formatoPEN(c.saldoCent)}
+                              <span className="flex items-center gap-2">
+                                <span className="font-semibold text-slate-900">
+                                  {formatoPEN(c.saldoCent)}
+                                </span>
+                                {/* 6.10 · Cobrar la deuda desde aquí mismo */}
+                                <Link
+                                  href={`/periodos/${c.periodoId}?pagar=${d.dpto}#dpto-${d.dpto}`}
+                                  className="rounded-lg bg-slate-900 px-2.5 py-1.5 text-xs font-bold text-white hover:bg-slate-700"
+                                >
+                                  Registrar pago
+                                </Link>
                               </span>
                             </li>
                           ))}
@@ -194,8 +203,9 @@ export default async function EstadoCuentaPage() {
                 })}
               </ul>
               <p className="mt-3 text-xs text-slate-500">
-                Las deudas se pagan desde la cobranza del periodo correspondiente;
-                el dinero entra a la caja del mes en que se cobra.
+                Toca «Registrar pago» en la cuota que corresponda, aunque el mes
+                ya esté cerrado. El dinero entra a la caja del mes en que se
+                cobra y la deuda del departamento se borra.
               </p>
             </section>
           )}
