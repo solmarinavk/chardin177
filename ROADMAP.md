@@ -198,11 +198,30 @@ escriben**: administración, tesorería y portería. Ver `docs/MATRIZ_ROLES.md`.
   ya abierto (`?pagar=dpto`), con los avisos de pago repetido de 6.8. Lógica pura en
   `lib/flujo.ts` (`pagosAtrasados`) con tests.
 
+- [x] 6.11 **Deshacer la emisión y alerta de lecturas en 0** (sin migración). Pasó el
+  17/11/2026: las 10 lecturas de noviembre quedaron con la actual igual a la anterior
+  (consumo 0), el motor repartió el agua en partes iguales —como manda la regla 8— y se
+  emitieron 10 cuotas idénticas de S/ 630.23 sin que nadie lo viera; el resumen llegó al grupo
+  antes de notarlo. Faltaba la parte de **alertar** de la regla 8. Ahora: (a) en **Lecturas**,
+  cada dpto con 0 m³ avisa ("la actual quedó igual que la anterior") y si todas están en 0 sale
+  un aviso rojo antes de guardar; (b) en el **Borrador de cuotas**, los 0 m³ van en rojo; si
+  todas las lecturas están en 0 el botón Emitir desaparece y se explica qué corregir, y si algo
+  cambió después de calcular (lectura, recibo, derrama o ajuste) pide **Recalcular** antes de
+  emitir; `emitirPeriodo` vuelve a comprobar las dos cosas en el servidor; (c) en un mes
+  **emitido** sin ningún pago, tesorería/admin tienen **"Deshacer la emisión"** (plegado al
+  final del mes; se abre solo si se emitió con lecturas en 0, con un aviso rojo arriba): el mes
+  vuelve a preparación con lecturas, recibos y derrama intactos, se corrige, se recalcula y se
+  emite de nuevo; las cuotas viejas quedan en `audit_log` al recalcular. Es la única excepción
+  a la regla 3 y está acotada (ver `CLAUDE.md`): nunca con pagos, nunca sobre un mes cerrado, y
+  la clave foránea `pagos → cuotas` lo garantiza además en la base. Lógica pura en
+  `lib/revision-cuotas.ts` con tests; el flujo completo contra el esquema real en
+  `tests/deshacer_emision.test.ts`.
+
 > **Lo que corres tú:** aplicar las migraciones `0010_ocurrencias.sql`,
 > `0011_egresos_correccion.sql` y `0012_recibos_porteria.sql` en Supabase → SQL Editor, y
 > hacer merge + re-deploy en Netlify. No hay pasos manuales en el dashboard. _(Los fixes 6.5,
-> 6.6, 6.8 y 6.10 solo necesitan merge + re-deploy; el 6.7 necesita la `0011` y el 6.9 la
-> `0012`.)_
+> 6.6, 6.8, 6.10 y 6.11 solo necesitan merge + re-deploy; el 6.7 necesita la `0011` y el 6.9
+> la `0012`.)_
 
 ## Backlog (ideas futuras, no bloquean nada)
 

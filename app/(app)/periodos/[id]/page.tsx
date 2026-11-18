@@ -8,12 +8,14 @@ import {
   getPagosPorCuota,
   getDepartamentos,
   getDerramas,
+  getAjustes,
   getRecibosMesAnterior,
   type ResumenPeriodo,
 } from "@/lib/periodos";
 import { getLibroCaja } from "@/lib/caja";
 import { getConstanciasPendientes } from "@/lib/constancias";
 import { pasosDelMes } from "@/lib/flujo";
+import { avisoConsumo, motivosRecalcular } from "@/lib/revision-cuotas";
 import { etiquetaPeriodo, formatoFecha, hoyLima } from "@/lib/fechas";
 import { formatoPEN } from "@/lib/centimos";
 import { textoResumenMes } from "@/lib/recibo";
@@ -46,6 +48,7 @@ import {
   registrarPago,
   anularPago,
   cerrarPeriodo,
+  deshacerEmision,
   crearDerrama,
   eliminarDerrama,
 } from "../acciones";
@@ -102,6 +105,10 @@ export default async function PeriodoDetallePage({
   const cobranzaVisible =
     gestiona &&
     (periodo.estado === "emitido" || (periodo.estado === "cerrado" && hayDeudaPendiente));
+  // 6.11 · Se emitió con todas las lecturas en 0 (10 cuotas idénticas): la
+  // pantalla lo dice en rojo y lleva a "Deshacer la emisión".
+  const emitidoConCero =
+    periodo.estado === "emitido" && avisoConsumo(resumen.cuotas)?.nivel === "bloquea";
 
   // URLs firmadas de las fotos de los recibos (buckets privados).
   const fotoAgua = resumen.recibos.agua?.foto_url
@@ -229,31 +236,7 @@ export default async function PeriodoDetallePage({
             >
               <h2 className="titulo-seccion mb-3">Borrador de cuotas</h2>
               <CuotasDesglose cuotas={resumen.cuotas} recibos={resumen.recibos} />
-              {gestiona && (
-                <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <p className="font-bold text-slate-900">
-                    Emitir {etiquetaPeriodo(periodo.anio, periodo.mes)}
-                  </p>
-                  <p className="mt-1 text-sm text-slate-600">
-                    Se congelarán las 10 cuotas por un total de{" "}
-                    <span className="num font-bold text-slate-900">
-                      {formatoPEN(resumen.esperadoCent)}
-                    </span>
-                    . Después de emitir ya no se editan lecturas ni recibos de este
-                    mes; toda corrección va como ajuste del mes siguiente.
-                  </p>
-                  <div className="mt-3">
-                    <FormAccionPeriodo
-                      accion={emitirPeriodo}
-                      periodoId={id}
-                      texto="Emitir periodo"
-                      textoEnviando="Emitiendo…"
-                      className="btn-primary w-full"
-                      confirmar="¿Emitir el periodo? Las cuotas quedarán congeladas y los vecinos las verán."
-                    />
-                  </div>
-                </div>
-              )}
+              {gestiona && <EmitirSection periodoId={id} resumen={resumen} />}
             </section>
           )}
 
@@ -262,6 +245,33 @@ export default async function PeriodoDetallePage({
 
       {(periodo.estado === "emitido" || periodo.estado === "cerrado") && (
         <>
+          {/* 6.11 · Emitido con las lecturas en 0: avisar y llevar a deshacer */}
+          {emitidoConCero && (
+            <section
+              role="alert"
+              className="animar-aparecer rounded-2xl border border-red-200 bg-red-50 p-5"
+            >
+              <p className="flex items-start gap-2 font-bold text-red-800">
+                <IconoAlerta className="mt-0.5 h-5 w-5 shrink-0" />
+                Este mes se emitió con las lecturas de agua en 0
+              </p>
+              <p className="mt-2 text-sm text-red-800">
+                En los 10 departamentos la lectura actual quedó igual a la anterior, así
+                que el agua se repartió en partes iguales y las 10 cuotas salieron
+                idénticas. El cálculo está bien; las lecturas están mal.
+              </p>
+              {gestiona && (
+                <p className="mt-2 text-sm text-red-800">
+                  Si nadie ha pagado todavía:{" "}
+                  <a href="#deshacer" className="font-bold underline underline-offset-2">
+                    deshaz la emisión
+                  </a>
+                  , pide que corrijan las lecturas, recalcula y vuelve a emitir.
+                </p>
+              )}
+            </section>
+          )}
+
           {/* Recaudación + semáforo */}
           <section className="card animar-aparecer p-5">
             <h2 className="titulo-seccion mb-3">Quién pagó</h2>
@@ -304,6 +314,11 @@ export default async function PeriodoDetallePage({
           {/* Cerrar el mes (2.3) */}
           {gestiona && periodo.estado === "emitido" && (
             <CierreSection resumen={resumen} periodoId={id} />
+          )}
+
+          {/* 6.11 · Deshacer la emisión (solo mientras nadie haya pagado) */}
+          {gestiona && periodo.estado === "emitido" && (
+            <DeshacerSection resumen={resumen} periodoId={id} abrir={emitidoConCero} />
           )}
 
           {/* Desglose */}
@@ -445,6 +460,150 @@ async function RecibosSection({
           fotoUrl={fotoLuz}
         />
       </div>
+    </section>
+  );
+}
+
+// 6.11 · El botón Emitir, con la revisión del borrador contra los datos de
+// hoy. Si todas las lecturas están en 0 no se puede emitir (se emitirían 10
+// cuotas idénticas, lo del 17/11/2026); si algo cambió después de calcular
+// (lectura, recibo, derrama o ajuste) hay que recalcular primero. La acción
+// del servidor vuelve a comprobar las dos cosas.
+async function EmitirSection({
+  periodoId,
+  resumen,
+}: {
+  periodoId: number;
+  resumen: ResumenPeriodo;
+}) {
+  const ajustes = await getAjustes(periodoId);
+  const aviso = avisoConsumo(resumen.cuotas);
+  const motivos = motivosRecalcular(
+    resumen.cuotas,
+    resumen.lecturasAgua,
+    {
+      aguaCent: resumen.recibos.agua?.monto_cent ?? null,
+      luzCent: resumen.recibos.luz?.monto_cent ?? null,
+    },
+    ajustes,
+  );
+  const etiqueta = etiquetaPeriodo(resumen.periodo.anio, resumen.periodo.mes);
+
+  if (aviso?.nivel === "bloquea") {
+    return (
+      <div role="alert" className="mt-5 rounded-2xl border border-red-200 bg-red-50 p-4">
+        <p className="flex items-start gap-1.5 font-bold text-red-800">
+          <IconoAlerta className="mt-0.5 h-5 w-5 shrink-0" />
+          Todavía no se puede emitir
+        </p>
+        <p className="mt-1 text-sm text-red-800">{aviso.texto}</p>
+        <Link href="/lecturas" className="btn-secondary mt-3 w-full">
+          Ir a Lecturas de agua
+        </Link>
+      </div>
+    );
+  }
+
+  if (motivos.length > 0) {
+    return (
+      <div role="alert" className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+        <p className="flex items-start gap-1.5 font-bold text-amber-900">
+          <IconoAlerta className="mt-0.5 h-5 w-5 shrink-0" />
+          Vuelve a calcular antes de emitir
+        </p>
+        <p className="mt-1 text-sm text-amber-900">
+          Hay datos que cambiaron después de calcular: {motivos.join(", ")}. Este
+          borrador ya no corresponde a lo que hay hoy.
+        </p>
+        <a href="#calcular" className="btn-secondary mt-3 w-full">
+          Ir a Recalcular cuotas
+        </a>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      {aviso && (
+        <p className="mt-4 flex items-start gap-1.5 rounded-xl bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800">
+          <IconoAlerta className="mt-0.5 h-4 w-4 shrink-0" />
+          {aviso.texto}
+        </p>
+      )}
+      <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+        <p className="font-bold text-slate-900">Emitir {etiqueta}</p>
+        <p className="mt-1 text-sm text-slate-600">
+          Se congelarán las 10 cuotas por un total de{" "}
+          <span className="num font-bold text-slate-900">
+            {formatoPEN(resumen.esperadoCent)}
+          </span>
+          . Después de emitir ya no se editan lecturas ni recibos de este mes; toda
+          corrección va como ajuste del mes siguiente (salvo que nadie haya pagado
+          aún: ahí se puede deshacer la emisión).
+        </p>
+        <div className="mt-3">
+          <FormAccionPeriodo
+            accion={emitirPeriodo}
+            periodoId={periodoId}
+            texto="Emitir periodo"
+            textoEnviando="Emitiendo…"
+            className="btn-primary w-full"
+            confirmar="¿Emitir el periodo? Las cuotas quedarán congeladas y los vecinos las verán."
+          />
+        </div>
+      </div>
+    </>
+  );
+}
+
+// 6.11 · Deshacer la emisión mientras nadie haya pagado (ver acciones.ts).
+// Va plegado para no asustar; se abre solo cuando el mes se emitió con las
+// lecturas en 0, que es cuando hace falta.
+function DeshacerSection({
+  resumen,
+  periodoId,
+  abrir,
+}: {
+  resumen: ResumenPeriodo;
+  periodoId: number;
+  abrir: boolean;
+}) {
+  const hayPagos = resumen.recaudadoCent > 0;
+  const etiqueta = etiquetaPeriodo(resumen.periodo.anio, resumen.periodo.mes);
+  return (
+    <section id="deshacer" className="card animar-aparecer scroll-mt-24 p-5">
+      <details className="group" open={abrir}>
+        <summary className="flex cursor-pointer list-none items-center gap-1 text-sm font-semibold text-slate-700 hover:text-slate-900">
+          <IconoFlecha className="h-3.5 w-3.5 transition-transform group-open:rotate-90" />
+          ¿Emitiste con un error? Deshacer la emisión
+        </summary>
+        <div className="mt-3 text-sm text-slate-600">
+          <p>
+            Mientras nadie haya pagado, puedes deshacer la emisión: el mes vuelve a
+            preparación con sus lecturas, recibos y derrama tal como están. Corriges lo
+            que estaba mal, pulsas <b>Recalcular cuotas</b> y vuelves a emitir. Si ya
+            mandaste el resumen al grupo, avisa que las cuotas van a cambiar.
+          </p>
+          {hayPagos ? (
+            <p className="mt-3 flex items-start gap-1.5 rounded-xl bg-amber-50 px-3 py-2 font-medium text-amber-800">
+              <IconoAlerta className="mt-0.5 h-4 w-4 shrink-0" />
+              Ya hay pagos registrados en este mes: la emisión ya no se puede deshacer.
+              Las correcciones van como ajuste del mes siguiente.
+            </p>
+          ) : (
+            <div className="mt-3">
+              <FormAccionPeriodo
+                accion={deshacerEmision}
+                periodoId={periodoId}
+                texto="Deshacer la emisión"
+                textoEnviando="Deshaciendo…"
+                className="btn-secondary w-full"
+                confirmar={`¿Deshacer la emisión de ${etiqueta}? Las cuotas dejan de estar publicadas y el mes vuelve a preparación. Después corriges, recalculas y vuelves a emitir.`}
+              />
+            </div>
+          )}
+        </div>
+      </details>
     </section>
   );
 }
