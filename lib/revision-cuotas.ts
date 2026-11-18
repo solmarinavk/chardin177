@@ -72,6 +72,35 @@ export function avisoConsumo(
   return null;
 }
 
+export type ProblemaBorrador =
+  | { tipo: "recalcular"; texto: string; motivos: string[] }
+  | { tipo: "consumo"; texto: string }
+  | null;
+
+// Qué impide emitir, en orden de prioridad. PRIMERO si el borrador quedó
+// desactualizado (hay que recalcular): es exactamente lo que pasa justo
+// después de corregir las lecturas, y ahí decir "consumo 0" confunde (pasó
+// el 18/11: Mamita corrigió las 10 lecturas y la pantalla seguía en rojo).
+// Recién después, el consumo 0 del borrador vigente.
+export function problemaDelBorrador(
+  cuotas: CuotaRevisable[],
+  lecturas: LecturaRevisable[],
+  recibos: { aguaCent: number | null; luzCent: number | null },
+  ajustes: AjusteRevisable[],
+): ProblemaBorrador {
+  const motivos = motivosRecalcular(cuotas, lecturas, recibos, ajustes);
+  if (motivos.length > 0) {
+    return {
+      tipo: "recalcular",
+      motivos,
+      texto: `Hay datos que cambiaron después de calcular: ${motivos.join(", ")}. Pulsa «Recalcular cuotas» y vuelve a emitir.`,
+    };
+  }
+  const aviso = avisoConsumo(cuotas);
+  if (aviso?.nivel === "bloquea") return { tipo: "consumo", texto: aviso.texto };
+  return null;
+}
+
 // Cuotas calculadas con datos que después cambiaron. Compara el borrador
 // contra las lecturas, los recibos y los ajustes de HOY y devuelve los
 // motivos (vacío = todo al día). Si hay alguno, toca recalcular antes de emitir.

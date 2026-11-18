@@ -15,7 +15,7 @@ import {
 import { getLibroCaja } from "@/lib/caja";
 import { getConstanciasPendientes } from "@/lib/constancias";
 import { pasosDelMes } from "@/lib/flujo";
-import { avisoConsumo, motivosRecalcular } from "@/lib/revision-cuotas";
+import { avisoConsumo, problemaDelBorrador } from "@/lib/revision-cuotas";
 import { etiquetaPeriodo, formatoFecha, hoyLima } from "@/lib/fechas";
 import { formatoPEN } from "@/lib/centimos";
 import { textoResumenMes } from "@/lib/recibo";
@@ -465,10 +465,12 @@ async function RecibosSection({
 }
 
 // 6.11 · El botón Emitir, con la revisión del borrador contra los datos de
-// hoy. Si todas las lecturas están en 0 no se puede emitir (se emitirían 10
-// cuotas idénticas, lo del 17/11/2026); si algo cambió después de calcular
-// (lectura, recibo, derrama o ajuste) hay que recalcular primero. La acción
-// del servidor vuelve a comprobar las dos cosas.
+// hoy. Primero, si algo cambió después de calcular (lectura, recibo, derrama
+// o ajuste) hay que recalcular: es lo que pasa justo después de corregir las
+// lecturas, y la tabla de arriba sigue mostrando las cuotas viejas. Después,
+// si todas las lecturas están en 0 no se puede emitir (se emitirían 10
+// cuotas idénticas, lo del 17/11/2026). La acción del servidor vuelve a
+// comprobar las dos cosas en el mismo orden.
 async function EmitirSection({
   periodoId,
   resumen,
@@ -477,8 +479,7 @@ async function EmitirSection({
   resumen: ResumenPeriodo;
 }) {
   const ajustes = await getAjustes(periodoId);
-  const aviso = avisoConsumo(resumen.cuotas);
-  const motivos = motivosRecalcular(
+  const problema = problemaDelBorrador(
     resumen.cuotas,
     resumen.lecturasAgua,
     {
@@ -487,24 +488,10 @@ async function EmitirSection({
     },
     ajustes,
   );
+  const aviso = avisoConsumo(resumen.cuotas);
   const etiqueta = etiquetaPeriodo(resumen.periodo.anio, resumen.periodo.mes);
 
-  if (aviso?.nivel === "bloquea") {
-    return (
-      <div role="alert" className="mt-5 rounded-2xl border border-red-200 bg-red-50 p-4">
-        <p className="flex items-start gap-1.5 font-bold text-red-800">
-          <IconoAlerta className="mt-0.5 h-5 w-5 shrink-0" />
-          Todavía no se puede emitir
-        </p>
-        <p className="mt-1 text-sm text-red-800">{aviso.texto}</p>
-        <Link href="/lecturas" className="btn-secondary mt-3 w-full">
-          Ir a Lecturas de agua
-        </Link>
-      </div>
-    );
-  }
-
-  if (motivos.length > 0) {
+  if (problema?.tipo === "recalcular") {
     return (
       <div role="alert" className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4">
         <p className="flex items-start gap-1.5 font-bold text-amber-900">
@@ -512,12 +499,27 @@ async function EmitirSection({
           Vuelve a calcular antes de emitir
         </p>
         <p className="mt-1 text-sm text-amber-900">
-          Hay datos que cambiaron después de calcular: {motivos.join(", ")}. Este
-          borrador ya no corresponde a lo que hay hoy.
+          Hay datos que cambiaron después de calcular: {problema.motivos.join(", ")}.
+          La tabla de arriba todavía muestra las cuotas viejas.
         </p>
         <a href="#calcular" className="btn-secondary mt-3 w-full">
           Ir a Recalcular cuotas
         </a>
+      </div>
+    );
+  }
+
+  if (problema?.tipo === "consumo") {
+    return (
+      <div role="alert" className="mt-5 rounded-2xl border border-red-200 bg-red-50 p-4">
+        <p className="flex items-start gap-1.5 font-bold text-red-800">
+          <IconoAlerta className="mt-0.5 h-5 w-5 shrink-0" />
+          Todavía no se puede emitir
+        </p>
+        <p className="mt-1 text-sm text-red-800">{problema.texto}</p>
+        <Link href="/lecturas" className="btn-secondary mt-3 w-full">
+          Ir a Lecturas de agua
+        </Link>
       </div>
     );
   }

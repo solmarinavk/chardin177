@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   avisoConsumo,
   motivosRecalcular,
+  problemaDelBorrador,
   listaDptos,
   type CuotaRevisable,
   type LecturaRevisable,
@@ -130,6 +131,28 @@ describe("motivosRecalcular (el borrador contra los datos de hoy)", () => {
       "la derrama cambió",
       "los ajustes cambiaron",
     ]);
+  });
+});
+
+describe("problemaDelBorrador (qué impide emitir, y en qué orden)", () => {
+  const viejas = CUOTAS.map((c) => ({ ...c, m3_variacion: 0 }));
+
+  it("recién corregidas las lecturas, el borrador viejo con 0 m³ pide RECALCULAR, no dice 'consumo 0' (18/11)", () => {
+    const p = problemaDelBorrador(viejas, LECTURAS, RECIBOS, AJUSTES);
+    expect(p?.tipo).toBe("recalcular");
+    expect(p?.texto).toMatch(/Recalcular cuotas/);
+    expect(p?.texto).not.toMatch(/partes iguales/);
+  });
+
+  it("borrador al día pero con todas las lecturas en 0: consumo (bloquea)", () => {
+    const lecturasEnCero = LECTURAS.map((l) => ({ ...l, lectura_actual: l.lectura_anterior }));
+    const p = problemaDelBorrador(viejas, lecturasEnCero, RECIBOS, AJUSTES);
+    expect(p?.tipo).toBe("consumo");
+    expect(p?.texto).toMatch(/partes iguales/);
+  });
+
+  it("todo al día y con consumo: nada impide emitir", () => {
+    expect(problemaDelBorrador(CUOTAS, LECTURAS, RECIBOS, AJUSTES)).toBeNull();
   });
 });
 
