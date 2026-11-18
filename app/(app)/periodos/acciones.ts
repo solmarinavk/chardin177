@@ -16,7 +16,7 @@ import {
 } from "@/lib/storage";
 import { notificarEmision } from "@/lib/notificaciones";
 import { avisoPago } from "@/lib/duplicados";
-import { avisoConsumo, motivosRecalcular } from "@/lib/revision-cuotas";
+import { problemaDelBorrador } from "@/lib/revision-cuotas";
 import { formatoPEN } from "@/lib/centimos";
 import { etiquetaPeriodo, formatoFecha } from "@/lib/fechas";
 import type { MedioPago, TipoRecibo } from "@/lib/database.types";
@@ -145,11 +145,11 @@ export async function generarCuotas(
   return { ok: true, error: null, mensaje: "Cuotas calculadas. Revisa el borrador." };
 }
 
-// 6.11 · Antes de emitir, revisa el borrador con los datos de HOY: todas las
-// lecturas en consumo 0 (se emitirían 10 cuotas idénticas, lo del 17/11) o
-// cuotas calculadas con datos que cambiaron después (hay que recalcular). La
+// 6.11 · Antes de emitir, revisa el borrador con los datos de HOY: cuotas
+// calculadas con datos que cambiaron después (hay que recalcular) o todas las
+// lecturas en consumo 0 (se emitirían 10 cuotas idénticas, lo del 17/11). La
 // base no lo comprueba; la app sí, aquí y en la pantalla del mes.
-async function problemaDelBorrador(
+async function revisarBorrador(
   s: ReturnType<typeof createClient>,
   periodoId: number,
 ): Promise<string | null> {
@@ -171,10 +171,7 @@ async function problemaDelBorrador(
   const lista = cuotas ?? [];
   if (lista.length !== 10) return "Calcula las cuotas antes de emitir.";
 
-  const aviso = avisoConsumo(lista);
-  if (aviso?.nivel === "bloquea") return aviso.texto;
-
-  const motivos = motivosRecalcular(
+  const problema = problemaDelBorrador(
     lista,
     lecturas ?? [],
     {
@@ -183,9 +180,7 @@ async function problemaDelBorrador(
     },
     ajustes ?? [],
   );
-  if (motivos.length > 0)
-    return `Hay datos que cambiaron después de calcular: ${motivos.join(", ")}. Pulsa «Recalcular cuotas» y vuelve a emitir.`;
-  return null;
+  return problema?.texto ?? null;
 }
 
 // 1.6 · Emitir el periodo (congela las cuotas, inmutable en adelante).
@@ -198,7 +193,7 @@ export async function emitirPeriodo(
   if (periodoId === null) return { ok: false, error: "Periodo inválido." };
 
   const s = createClient();
-  const problema = await problemaDelBorrador(s, periodoId);
+  const problema = await revisarBorrador(s, periodoId);
   if (problema) return { ok: false, error: problema };
 
   const { error } = await s.rpc("emitir_periodo", { p_periodo: periodoId });
