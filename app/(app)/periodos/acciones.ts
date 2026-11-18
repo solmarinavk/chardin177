@@ -16,8 +16,9 @@ import {
 } from "@/lib/storage";
 import { notificarEmision } from "@/lib/notificaciones";
 import { avisoPago } from "@/lib/duplicados";
+import { avisoConsumo, motivosRecalcular } from "@/lib/revision-cuotas";
 import { formatoPEN } from "@/lib/centimos";
-import { formatoFecha } from "@/lib/fechas";
+import { etiquetaPeriodo, formatoFecha } from "@/lib/fechas";
 import type { MedioPago, TipoRecibo } from "@/lib/database.types";
 
 const TESORERIA: ("tesoreria" | "admin")[] = ["tesoreria", "admin"];
@@ -144,6 +145,49 @@ export async function generarCuotas(
   return { ok: true, error: null, mensaje: "Cuotas calculadas. Revisa el borrador." };
 }
 
+// 6.11 · Antes de emitir, revisa el borrador con los datos de HOY: todas las
+// lecturas en consumo 0 (se emitirían 10 cuotas idénticas, lo del 17/11) o
+// cuotas calculadas con datos que cambiaron después (hay que recalcular). La
+// base no lo comprueba; la app sí, aquí y en la pantalla del mes.
+async function problemaDelBorrador(
+  s: ReturnType<typeof createClient>,
+  periodoId: number,
+): Promise<string | null> {
+  const [{ data: cuotas }, { data: lecturas }, { data: recibos }, { data: ajustes }] =
+    await Promise.all([
+      s
+        .from("cuotas")
+        .select(
+          "dpto_id, m3_variacion, agua_consumo_cent, agua_comun_cent, luz_cent, extra_cent, ajuste_cent",
+        )
+        .eq("periodo_id", periodoId),
+      s
+        .from("lecturas_agua")
+        .select("dpto_id, lectura_anterior, lectura_actual")
+        .eq("periodo_id", periodoId),
+      s.from("recibos_servicios").select("tipo, monto_cent").eq("periodo_id", periodoId),
+      s.from("ajustes").select("dpto_id, monto_cent, origen").eq("periodo_id", periodoId),
+    ]);
+  const lista = cuotas ?? [];
+  if (lista.length !== 10) return "Calcula las cuotas antes de emitir.";
+
+  const aviso = avisoConsumo(lista);
+  if (aviso?.nivel === "bloquea") return aviso.texto;
+
+  const motivos = motivosRecalcular(
+    lista,
+    lecturas ?? [],
+    {
+      aguaCent: (recibos ?? []).find((r) => r.tipo === "agua")?.monto_cent ?? null,
+      luzCent: (recibos ?? []).find((r) => r.tipo === "luz")?.monto_cent ?? null,
+    },
+    ajustes ?? [],
+  );
+  if (motivos.length > 0)
+    return `Hay datos que cambiaron después de calcular: ${motivos.join(", ")}. Pulsa «Recalcular cuotas» y vuelve a emitir.`;
+  return null;
+}
+
 // 1.6 · Emitir el periodo (congela las cuotas, inmutable en adelante).
 export async function emitirPeriodo(
   _prev: EstadoForm,
@@ -154,6 +198,9 @@ export async function emitirPeriodo(
   if (periodoId === null) return { ok: false, error: "Periodo inválido." };
 
   const s = createClient();
+  const problema = await problemaDelBorrador(s, periodoId);
+  if (problema) return { ok: false, error: problema };
+
   const { error } = await s.rpc("emitir_periodo", { p_periodo: periodoId });
   if (error) return { ok: false, error: mensajeError(error) };
 
@@ -168,6 +215,87 @@ export async function emitirPeriodo(
 
   revalidatePath(`/periodos/${periodoId}`);
   return { ok: true, error: null, mensaje: `Periodo emitido.${notif}` };
+}
+
+// 6.11 · Deshacer la emisión mientras NADIE haya pagado. Es la única excepción
+// a la regla 3 ("emitido es inmutable") y está acotada: solo mientras no
+// existe ningún pago sobre el mes (nada financiero ocurrió todavía), nunca
+// sobre un mes cerrado y solo tesorería/admin. El mes vuelve a preparación
+// con sus lecturas, recibos y derrama intactos; al recalcular, el motor
+// reemplaza las cuotas y el borrado queda en audit_log a nombre de quien lo
+// hizo. Si alguien pagara en el medio, la clave foránea pagos → cuotas impide
+// reemplazarlas: la base protege el dinero aunque la app se equivoque.
+export async function deshacerEmision(
+  _prev: EstadoForm,
+  formData: FormData,
+): Promise<EstadoForm> {
+  await requireRol(TESORERIA);
+  const periodoId = enteroDesdeInput(formData.get("periodo_id"));
+  if (periodoId === null) return { ok: false, error: "Periodo inválido." };
+
+  const s = createClient();
+  const { data: periodo } = await s
+    .from("periodos")
+    .select("id, estado, anio, mes")
+    .eq("id", periodoId)
+    .maybeSingle();
+  if (!periodo) return { ok: false, error: "No se encontró el periodo." };
+  if (periodo.estado === "borrador")
+    return { ok: true, error: null, mensaje: "Este mes ya está en preparación." };
+  if (periodo.estado !== "emitido")
+    return {
+      ok: false,
+      error:
+        "Solo se puede deshacer la emisión de un mes emitido. Un mes cerrado no se toca: las correcciones van como ajuste del mes siguiente.",
+    };
+
+  const { data: cuotas } = await s.from("cuotas").select("id").eq("periodo_id", periodoId);
+  const ids = (cuotas ?? []).map((c) => c.id);
+  if (ids.length > 0) {
+    const { count } = await s
+      .from("pagos")
+      .select("id", { count: "exact", head: true })
+      .in("cuota_id", ids);
+    if ((count ?? 0) > 0)
+      return {
+        ok: false,
+        error: `Ya hay ${count} pago(s) registrados en este mes: la emisión no se puede deshacer. Las correcciones van como ajuste del mes siguiente.`,
+      };
+  }
+
+  const { data: otro } = await s
+    .from("periodos")
+    .select("anio, mes")
+    .eq("estado", "borrador")
+    .maybeSingle();
+  if (otro)
+    return {
+      ok: false,
+      error: `Ya hay otro mes en preparación (${etiquetaPeriodo(otro.anio, otro.mes)}): no puede haber dos a la vez.`,
+    };
+
+  const { data: hecho, error } = await s
+    .from("periodos")
+    .update({ estado: "borrador", emitido_en: null })
+    .eq("id", periodoId)
+    .eq("estado", "emitido")
+    .select("id");
+  if (error) return { ok: false, error: mensajeError(error) };
+  if (!hecho || hecho.length === 0)
+    return { ok: false, error: "No se pudo deshacer la emisión (¿cambió el estado del mes?)." };
+
+  revalidatePath("/periodos");
+  revalidatePath(`/periodos/${periodoId}`);
+  revalidatePath("/lecturas");
+  revalidatePath("/inicio");
+  revalidatePath("/caja");
+  revalidatePath("/estado-cuenta");
+  return {
+    ok: true,
+    error: null,
+    mensaje:
+      "Listo: el mes volvió a preparación. Corrige lo que estaba mal, pulsa «Recalcular cuotas» y vuelve a emitir.",
+  };
 }
 
 // 1.7 · Registrar un pago de una cuota (soporta pago parcial), con comprobante opcional.

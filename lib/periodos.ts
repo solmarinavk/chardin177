@@ -113,6 +113,19 @@ export async function getDerramas(periodoId: number): Promise<Derrama[]> {
   return [...porConcepto.values()];
 }
 
+// 6.11 · Todos los ajustes del periodo (derramas y otros), para comprobar que
+// el borrador calculado sigue al día con lo que hay hoy.
+export async function getAjustes(
+  periodoId: number,
+): Promise<{ dpto_id: number; monto_cent: number; origen: string | null }[]> {
+  const s = createClient();
+  const { data } = await s
+    .from("ajustes")
+    .select("dpto_id, monto_cent, origen")
+    .eq("periodo_id", periodoId);
+  return data ?? [];
+}
+
 export async function getLecturas(periodoId: number): Promise<LecturaAgua[]> {
   const s = createClient();
   const { data } = await s
@@ -229,6 +242,7 @@ export async function getPromediosConsumo(
 export type ResumenPeriodo = {
   periodo: Periodo;
   lecturas: number;
+  lecturasAgua: LecturaAgua[]; // 6.11 · para revisar el borrador contra las lecturas de hoy
   reciboAgua: boolean;
   reciboLuz: boolean;
   recibos: { agua: ReciboServicio | null; luz: ReciboServicio | null };
@@ -253,6 +267,7 @@ export async function getResumenPeriodo(periodo: Periodo): Promise<ResumenPeriod
   return {
     periodo,
     lecturas: lecturas.length,
+    lecturasAgua: lecturas,
     reciboAgua: recibos.agua !== null,
     reciboLuz: recibos.luz !== null,
     recibos,

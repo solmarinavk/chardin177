@@ -96,7 +96,14 @@ export function CuotasDesglose({
               >
                 <td className="sticky left-0 z-10 bg-inherit px-3 py-2 text-left font-bold text-slate-900">
                   {c.dpto_id}
-                  <span className="ml-1.5 text-xs font-normal text-slate-400">
+                  {/* 6.11 · 0 m³ en rojo: casi siempre es una lectura mal escrita */}
+                  <span
+                    className={`ml-1.5 text-xs ${
+                      c.m3_variacion === 0
+                        ? "font-bold text-red-600"
+                        : "font-normal text-slate-400"
+                    }`}
+                  >
                     {c.m3_variacion} m³
                   </span>
                 </td>

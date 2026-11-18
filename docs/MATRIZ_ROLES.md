@@ -28,6 +28,7 @@ abierta `/transparencia`), no un usuario: solo lectura, sin clave.
 | Registrar recibo de agua (Sedapal) y luz | **X** (sube monto y foto/PDF; sólo del mes en preparación, no borra) | **X** (revisa y corrige) | (respaldo) | ve |
 | Calcular cuotas del mes | | **X** | (respaldo) | |
 | Emitir el periodo | | **X** | **X** | ve resultado |
+| Deshacer la emisión (solo mientras nadie haya pagado; nunca un mes cerrado) | | **X** | **X** | |
 | Registrar pagos de cuotas + comprobante | | **X** | (respaldo) | ve |
 | Registrar egresos / gastos + comprobante | | **X** | **X** | ve |
 | Registrar mantenimiento / incidencia | | **X** | **X** | ve |

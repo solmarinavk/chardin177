@@ -89,18 +89,25 @@ export function FormLecturas({
     const act = v.actual === "" ? null : Number(v.actual);
     const delta = act === null ? null : act - ant;
     const menor = delta !== null && delta < 0;
+    // 6.11 · Consumo 0: la actual quedó igual a la anterior. Casi siempre es
+    // que se copió la anterior en vez de mirar el medidor (pasó el 17/11/2026
+    // en los 10 dptos y se emitieron 10 cuotas idénticas).
+    const cero = delta === 0;
     const alta =
       delta !== null &&
       !menor &&
+      !cero &&
       f.promedio !== null &&
       f.promedio > 0 &&
       Math.abs(delta - f.promedio) / f.promedio > 0.6;
     const completa = delta !== null && !menor;
-    return { delta, menor, alta, completa };
+    return { delta, menor, alta, cero, completa };
   }
 
   const completadas = filas.filter((f) => estadoFila(f).completa).length;
   const hayError = filas.some((f) => estadoFila(f).menor);
+  const enCero = filas.filter((f) => estadoFila(f).cero).length;
+  const todasEnCero = enCero >= 3 && enCero === completadas;
 
   return (
     <form action={formAction} className="flex flex-col gap-3">
@@ -110,7 +117,7 @@ export function FormLecturas({
       <ul className="flex flex-col gap-3">
         {filas.map((f, i) => {
           const v = valores[f.dpto]!;
-          const { delta, menor, alta, completa } = estadoFila(f);
+          const { delta, menor, alta, cero, completa } = estadoFila(f);
 
           return (
             <li
@@ -142,7 +149,7 @@ export function FormLecturas({
                 {delta !== null && !menor && (
                   <span
                     className={`chip num ${
-                      alta ? "bg-amber-100 text-amber-800" : "bg-sky-100 text-sky-800"
+                      alta || cero ? "bg-amber-100 text-amber-800" : "bg-sky-100 text-sky-800"
                     }`}
                   >
                     {delta} m³
@@ -230,6 +237,13 @@ export function FormLecturas({
                   m³). Vuelve a mirar el medidor.
                 </p>
               )}
+              {cero && (
+                <p className="mt-2 flex items-start gap-1.5 text-sm font-medium text-amber-700">
+                  <IconoAlerta className="mt-0.5 h-4 w-4 shrink-0" />
+                  Consumo 0 m³: la actual quedó igual que la anterior. En «Actual» va lo
+                  que marca el medidor hoy. ¿Seguro?
+                </p>
+              )}
 
               <div className="mt-3">
                 <CampoFoto
@@ -270,6 +284,12 @@ export function FormLecturas({
         {hayError && (
           <p role="alert" className="mt-2 rounded-xl bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
             Corrige los departamentos marcados en rojo antes de guardar.
+          </p>
+        )}
+        {todasEnCero && (
+          <p role="alert" className="mt-2 rounded-xl bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
+            Todas las lecturas tienen consumo 0. En «Actual» va lo que marca el medidor
+            hoy, no la lectura anterior. Revisa antes de guardar.
           </p>
         )}
         {estado.error && (
