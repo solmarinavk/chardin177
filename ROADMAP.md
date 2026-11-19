@@ -217,11 +217,19 @@ escriben**: administración, tesorería y portería. Ver `docs/MATRIZ_ROLES.md`.
   `lib/revision-cuotas.ts` con tests; el flujo completo contra el esquema real en
   `tests/deshacer_emision.test.ts`.
 
+- [x] 6.12 **Caja en la barra del celular y pestaña "Más"** (sin migración). La barra inferior
+  mostraba las 5 primeras secciones y Caja era la sexta: en el celular la tesorera no tenía
+  forma de llegar a registrar un gasto salvo escribiendo la dirección a mano (19/11/2026, al
+  registrar el pago a Gatwick). Ahora la barra muestra las 4 primeras y una pestaña **Más** que
+  despliega el resto; y el orden del menú pone primero lo de todos los días para tesorería
+  (Inicio, Lecturas, Periodos, Caja), con Cuenta, Cuaderno, Exportar y Docs en "Más". Portería
+  sigue viendo sus 3 pestañas sin "Más". Lógica pura en `lib/navegacion.ts` con tests.
+
 > **Lo que corres tú:** aplicar las migraciones `0010_ocurrencias.sql`,
 > `0011_egresos_correccion.sql` y `0012_recibos_porteria.sql` en Supabase → SQL Editor, y
 > hacer merge + re-deploy en Netlify. No hay pasos manuales en el dashboard. _(Los fixes 6.5,
-> 6.6, 6.8, 6.10 y 6.11 solo necesitan merge + re-deploy; el 6.7 necesita la `0011` y el 6.9
-> la `0012`.)_
+> 6.6, 6.8, 6.10, 6.11 y 6.12 solo necesitan merge + re-deploy; el 6.7 necesita la `0011` y
+> el 6.9 la `0012`.)_
 
 ## Backlog (ideas futuras, no bloquean nada)
 
