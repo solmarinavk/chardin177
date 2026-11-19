@@ -188,8 +188,20 @@ export function IconoAyuda(p: Props) {
   );
 }
 
+// Tres puntos: la pestaña "Más" de la barra del celular (6.12).
+export function IconoMas(p: Props) {
+  return (
+    <Svg {...p}>
+      <circle cx="5" cy="12" r="1.2" />
+      <circle cx="12" cy="12" r="1.2" />
+      <circle cx="19" cy="12" r="1.2" />
+    </Svg>
+  );
+}
+
 // Mapa por nombre (para pasar iconos de servidor a cliente como string).
 export const ICONOS: Record<string, (p: Props) => React.ReactElement> = {
+  mas: IconoMas,
   casa: IconoCasa,
   gota: IconoGota,
   calendario: IconoCalendario,

@@ -1,8 +1,10 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ICONOS, IconoCandado } from "@/components/iconos";
+import { ICONOS, IconoCandado, IconoMas } from "@/components/iconos";
+import { repartirBarra } from "@/lib/navegacion";
 
 export type NavItem = {
   href: string;
@@ -59,45 +61,122 @@ export function NavSuperior({ items }: { items: NavItem[] }) {
   );
 }
 
-// Barra inferior tipo app (solo celular): lo que usan el portero y los vecinos.
+// Barra inferior tipo app (solo celular). Caben 5 pestañas: si hay más
+// secciones, van las 4 primeras y una pestaña "Más" que despliega el resto
+// (6.12). Antes se cortaba en 5 y Caja, la sexta, no se podía abrir.
 export function NavInferior({ items }: { items: NavItem[] }) {
   const pathname = usePathname();
-  const activos = items.filter((i) => i.activo).slice(0, 5);
+  const [abierto, setAbierto] = useState(false);
+  // Al navegar se cierra el panel de "Más".
+  useEffect(() => {
+    setAbierto(false);
+  }, [pathname]);
+
+  const { principales, resto } = repartirBarra(items.filter((i) => i.activo));
+  const restoActivo = resto.some((i) => esActiva(pathname, i.href));
+  const resaltarMas = abierto || restoActivo;
+
   return (
-    <nav
-      aria-label="Principal"
-      className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur sm:hidden"
-    >
-      <ul className="flex justify-around">
-        {activos.map((item) => {
-          const Icono = ICONOS[item.icono] ?? ICONOS.casa!;
-          const activa = esActiva(pathname, item.href);
-          return (
-            <li key={item.href} className="flex-1">
-              <Link
-                href={item.href}
-                aria-current={activa ? "page" : undefined}
-                className="flex min-h-[56px] flex-col items-center justify-center gap-0.5 py-1.5"
+    <>
+      {abierto && resto.length > 0 && (
+        <div
+          className="fixed inset-0 z-40 sm:hidden"
+          onClick={() => setAbierto(false)}
+        >
+          <div className="absolute inset-0 bg-slate-900/30" aria-hidden />
+          <div
+            role="dialog"
+            aria-label="Más secciones"
+            className="absolute inset-x-0 bottom-[calc(56px_+_env(safe-area-inset-bottom))] rounded-t-2xl border-t border-slate-200 bg-white p-3 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <ul className="grid grid-cols-2 gap-2">
+              {resto.map((item) => {
+                const Icono = ICONOS[item.icono] ?? ICONOS.casa!;
+                const activa = esActiva(pathname, item.href);
+                return (
+                  <li key={item.href}>
+                    <Link
+                      href={item.href}
+                      aria-current={activa ? "page" : undefined}
+                      className={`flex min-h-[52px] items-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold ${
+                        activa
+                          ? "border-slate-900 bg-slate-900 text-white"
+                          : "border-slate-200 bg-white text-slate-800"
+                      }`}
+                    >
+                      <Icono className="h-5 w-5 shrink-0" />
+                      {item.etiqueta}
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        </div>
+      )}
+
+      <nav
+        aria-label="Principal"
+        className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur sm:hidden"
+      >
+        <ul className="flex justify-around">
+          {principales.map((item) => {
+            const Icono = ICONOS[item.icono] ?? ICONOS.casa!;
+            const activa = esActiva(pathname, item.href);
+            return (
+              <li key={item.href} className="flex-1">
+                <Link
+                  href={item.href}
+                  aria-current={activa ? "page" : undefined}
+                  className="flex min-h-[56px] flex-col items-center justify-center gap-0.5 py-1.5"
+                >
+                  <span
+                    className={`rounded-full px-4 py-1 transition ${
+                      activa ? "bg-slate-900 text-white" : "text-slate-500"
+                    }`}
+                  >
+                    <Icono className="h-5 w-5" />
+                  </span>
+                  <span
+                    className={`text-[11px] font-medium ${
+                      activa ? "text-slate-900" : "text-slate-500"
+                    }`}
+                  >
+                    {item.etiqueta}
+                  </span>
+                </Link>
+              </li>
+            );
+          })}
+          {resto.length > 0 && (
+            <li className="flex-1">
+              <button
+                type="button"
+                aria-expanded={abierto}
+                aria-haspopup="dialog"
+                onClick={() => setAbierto((v) => !v)}
+                className="flex min-h-[56px] w-full flex-col items-center justify-center gap-0.5 py-1.5"
               >
                 <span
                   className={`rounded-full px-4 py-1 transition ${
-                    activa ? "bg-slate-900 text-white" : "text-slate-500"
+                    resaltarMas ? "bg-slate-900 text-white" : "text-slate-500"
                   }`}
                 >
-                  <Icono className="h-5 w-5" />
+                  <IconoMas className="h-5 w-5" />
                 </span>
                 <span
                   className={`text-[11px] font-medium ${
-                    activa ? "text-slate-900" : "text-slate-500"
+                    resaltarMas ? "text-slate-900" : "text-slate-500"
                   }`}
                 >
-                  {item.etiqueta}
+                  Más
                 </span>
-              </Link>
+              </button>
             </li>
-          );
-        })}
-      </ul>
-    </nav>
+          )}
+        </ul>
+      </nav>
+    </>
   );
 }
